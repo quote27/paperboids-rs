@@ -1,0 +1,10 @@
+[package]
+name = "paperboids"
+version = "0.0.0"
+authors = [ "quote <quote@lv0.io>" ]
+
+[[bin]]
+name = "main"
+
+[dependencies.kiss3d]
+git = "https://github.com/sebcrozet/kiss3d"

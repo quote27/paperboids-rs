@@ -1,0 +1,18 @@
+# from github/gitignore/Rust.gitignore
+*.o
+*.so
+*.rlib
+*.dll
+*.exe
+
+# from rust-lang/cargo/.gitignore
+target
+.cargo
+
+# others
+.DS_store
+*.swp
+*~
+
+shaders/
+.gitignore
