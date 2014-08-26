@@ -28,12 +28,12 @@ fn main() {
     ground.set_local_rotation(Vec3::new((90.0f32).to_radians(), 0.0, 0.0));
     ground.set_color(0.2, 0.2, 0.2);
 
-    let mut c = window.add_cube(1.0, 1.0, 1.0);
-    c.set_color(1.0, 0.0, 0.0);
-    c.set_local_translation(Vec3::new(0.0, 0.5, 0.0));
+    //let mut c = window.add_cube(1.0, 1.0, 1.0);
+    //c.set_color(1.0, 0.0, 0.0);
+    //c.set_local_translation(Vec3::new(0.0, 0.5, 0.0));
 
     let pmesh = plane_mesh();
-    let mut p = window.add_mesh(pmesh, na::one());
+    let mut p = window.add_mesh(pmesh, Vec3::new(0.5, 0.5, 0.5));
     p.set_color(1.0, 1.0, 1.0);
     p.enable_backface_culling(false);
     p.set_local_translation(Vec3::new(0.0f32, 2.0, 0.0));
@@ -41,20 +41,27 @@ fn main() {
     window.set_light(light::StickToCamera);
 
     while window.render_with_camera(&mut arc_ball) {
-        c.prepend_to_local_rotation(&Vec3::new(0.0f32, 0.014, 0.0));
-        
         let curr_time = window.context().get_time() as f32;
-        c.set_local_translation(Vec3::new(curr_time.sin(), 0.5f32, curr_time.cos()));
+        //c.prepend_to_local_rotation(&Vec3::new(0.0f32, 0.014, 0.0));
+        //c.set_local_translation(Vec3::new(curr_time.sin(), 0.5f32, curr_time.cos()));
+
+        let csin = curr_time.sin();
+        p.set_local_translation(Vec3::new(0.0, csin * 0.5 + 2.0, 0.0));
+        if csin > 0.0 {
+            p.prepend_to_local_rotation(&Vec3::new((0.1f32).to_radians() * csin, 0.0, 0.0));
+        } else {
+            p.prepend_to_local_rotation(&Vec3::new((-0.1f32).to_radians() * -csin, 0.0, 0.0));
+        }
     }
 }
 
 fn plane_mesh() -> Rc<RefCell<Mesh>> {
     let vertices = vec!(
         Vec3::new(0.0, 0.0, 1.0), // front / nose
-        Vec3::new(1.0, 0.0, -1.0), // left wing - 'port'
-        Vec3::new(-1.0, 0.0, -1.0), // right wing - 'starboard'
+        Vec3::new(0.75, 0.0, -1.0), // left wing - 'port'
+        Vec3::new(-0.75, 0.0, -1.0), // right wing - 'starboard'
         Vec3::new(0.0, 0.0, -1.0), // back midpoint between wings
-        Vec3::new(0.0, -0.5, -1.0), // back bottom fin
+        Vec3::new(0.0, -0.4, -1.0), // back bottom fin
     );
 
     let indices = vec!(
@@ -63,7 +70,5 @@ fn plane_mesh() -> Rc<RefCell<Mesh>> {
         Vec3::new(0u32, 4, 3),
     );
 
-    let mesh = Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)));
-
-    mesh
+    Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
 }
