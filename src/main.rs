@@ -58,11 +58,11 @@ impl Plane {
         node.set_lines_width(1.0);
         node.set_surface_rendering_activation(false);
 
-        let (x, z) = (rand::random::<f32>() * 5.0 - 2.5, rand::random::<f32>() * 5.0 - 2.5);
-        let (vx, vz) = (rand::random::<f32>() * 4.0 - 2.0, rand::random::<f32>() * 4.0 - 2.0);
+        let (x, z) = (rand::random::<f32>() * 50.0 - 25.0, rand::random::<f32>() * 50.0 - 25.0);
+        let (vx, vz) = (rand::random::<f32>() * 40.0 - 20.0, rand::random::<f32>() * 40.0 - 20.0);
 
         Plane {
-            pos: Vec3::new(x, 2.0, z),
+            pos: Vec3::new(x, 20.0, z),
             vel: Vec3::new(vx, 0.0, vz),
             acc: Vec3::new(0.0, 0.0, 0.0),
             node: node,
@@ -71,8 +71,16 @@ impl Plane {
 
     fn update(&mut self, dt: f32) {
         let dtv = Vec3::new(dt, dt, dt);
-        self.vel = self.vel + self.acc * dtv;
-        self.pos = self.pos + self.vel * dtv;
+
+        self.vel = self.vel + self.acc * dt;
+
+        let max_speed = 5.0;
+        let curr_speed = na::norm(&self.vel);
+        if curr_speed > max_speed {
+            self.vel = self.vel / curr_speed * max_speed;
+        }
+
+        self.pos = self.pos + self.vel * dt;
         self.node.look_at_z(&self.pos, &(self.pos + self.vel), &Vec3::y());
     }
 }
@@ -81,7 +89,7 @@ impl Plane {
 
 fn main() {
     // have camera start from higher position
-    let eye = Vec3::new(5.0, 5.0, 10.0);
+    let eye = Vec3::new(50.0, 50.0, 100.0);
     let at = na::one();
     let mut arc_ball = ArcBall::new(eye, at);
 
@@ -89,7 +97,7 @@ fn main() {
     window.set_framerate_limit(Some(60));
     window.set_light(light::StickToCamera);
 
-    let mut ground = window.add_quad(10.0, 10.0, 1, 1);
+    let mut ground = window.add_quad(100.0, 100.0, 1, 1);
     ground.set_local_rotation(Vec3::new((90.0f32).to_radians(), 0.0, 0.0));
     ground.set_color(0.2, 0.2, 0.2);
 
@@ -97,8 +105,13 @@ fn main() {
 
     let mut ps = Vec::new();
     for i in range(0i, 20) {
-        ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(0.2, 0.2, 0.2))));
+        //ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(0.2, 0.2, 0.2))));
+        ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(1.0, 1.0, 1.0))));
     }
+
+    let w1 = 0.2;
+    let w2 = 10.0;
+    let w3 = 0.2;
 
     let mut last_time = window.context().get_time() as f32;
     let mut curr_time;
@@ -110,58 +123,77 @@ fn main() {
         let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
         let flock_total_vel = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.vel);
 
+        let flock_abs_center = flock_total_pos / (ps.len() as f32);
+        window.draw_point(&flock_abs_center, &Vec3::new(0.0, 1.0, 0.0));
+
         for i in range(0, ps.len()) {
             // rule 1 : calculate center minus the current bird
             let center_pos = (flock_total_pos - ps[i].pos) / (ps.len() as f32 - 1.0);
-            let r1_center_push: Vec3<f32> = center_pos - ps[i].pos; //un weighted rule
+            let r1_center_push = center_pos - ps[i].pos; //un weighted rule
 
             let mut r1_scaled = r1_center_push;
-            r1_scaled.x = r1_scaled.x / 100.0;
-            r1_scaled.y = r1_scaled.y / 100.0;
-            r1_scaled.z = r1_scaled.z / 100.0;
+            r1_scaled.x *= w1;
+            r1_scaled.y *= w1;
+            r1_scaled.z *= w1;
 
+            window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
 
             // rule 2 : steer away from nearby boids
             let mut r2_collide_push: Vec3<f32> = na::zero();
+            let mut count_intersect  = 0u;
             for j in range(0, ps.len()) {
                 if i != j {
                     let disp = ps[j].pos - ps[i].pos;
-                    if na::norm(&disp) < 0.5 { //TODO: figure out collide range
-                        r2_collide_push = r2_collide_push - disp;
+                    let dist = na::norm(&disp);
+                    if dist < 5.0 { //TODO: figure out collide range
+                        let disp_norm_weight = na::normalize(&disp) / (dist * dist);
+                        r2_collide_push = r2_collide_push - disp_norm_weight;
+                        count_intersect += 1;
                     }
                 }
             }
+            if count_intersect > 0 {
+                r2_collide_push = r2_collide_push / count_intersect as f32;
+            }
 
+            let mut r2_scaled = r2_collide_push;
+            r2_scaled.x *= w2;
+            r2_scaled.y *= w2;
+            r2_scaled.z *= w2;
+
+            window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
 
             // rule 3 : match velocity of nearby birds
             let center_vel = (flock_total_vel - ps[i].vel) / (ps.len() as f32 - 1.0);
-            let r3_match_vel = center_vel - ps[i].vel;
+            let r3_match_vel = na::normalize(&center_vel) - ps[i].vel;
             let mut r3_scaled = r3_match_vel;
-            r3_scaled.x = r3_scaled.x / 20.0;
-            r3_scaled.y = r3_scaled.y / 20.0;
-            r3_scaled.z = r3_scaled.z / 20.0;
+            r3_scaled.x *= w3;
+            r3_scaled.y *= w3;
+            r3_scaled.z *= w3;
 
-            ps.get_mut(i).vel = ps[i].vel + r1_scaled + r2_collide_push + r3_scaled;
+            window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
+
+            ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled;
         }
 
         // step update
         for p in ps.mut_iter() {
             p.acc.x =
-                if p.pos.x > 5.0 {
-                    -2.0
-                } else if p.pos.x < -5.0 {
-                    2.0
+                if p.pos.x > 50.0 {
+                    -20.0
+                } else if p.pos.x < -50.0 {
+                    20.0
                 } else {
-                    0.0
+                    p.acc.x
                 };
 
             p.acc.z =
-                if p.pos.z > 5.0 {
-                    -2.0
-                } else if p.pos.z < -5.0 {
-                    2.0
+                if p.pos.z > 50.0 {
+                    -20.0
+                } else if p.pos.z < -50.0 {
+                    20.0
                 } else {
-                    0.0
+                    p.acc.z
                 };
 
             p.update(curr_time - last_time);
