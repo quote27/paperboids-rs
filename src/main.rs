@@ -58,6 +58,14 @@ impl Plane {
         node.set_lines_width(1.0);
         node.set_surface_rendering_activation(false);
 
+        let mut cyl = node.add_cylinder(5.0, 0.0);
+        cyl.append_translation(&Vec3::new(0.0, -0.1, 0.0));
+        cyl.set_color(0.5, 0.5, 0.5);
+        cyl.enable_backface_culling(true);
+        cyl.set_points_size(1.0); //wireframe mode for plane
+        cyl.set_lines_width(1.0);
+        cyl.set_surface_rendering_activation(false);
+
         let (x, z) = (rand::random::<f32>() * 50.0 - 25.0, rand::random::<f32>() * 50.0 - 25.0);
         let (vx, vz) = (rand::random::<f32>() * 40.0 - 20.0, rand::random::<f32>() * 40.0 - 20.0);
 
@@ -74,16 +82,19 @@ impl Plane {
 
         self.vel = self.vel + self.acc * dt;
 
-        let max_speed = 5.0;
+        let max_speed = 10.0;
+        let min_speed = 2.0;
         let curr_speed = na::norm(&self.vel);
         if curr_speed > max_speed {
             self.vel = self.vel / curr_speed * max_speed;
+        } else if curr_speed < min_speed {
+            self.vel = self.vel / curr_speed * min_speed;
         }
 
         self.pos = self.pos + self.vel * dt;
         self.node.look_at_z(&self.pos, &(self.pos + self.vel), &Vec3::y());
     }
-}
+} 
 
 
 
@@ -103,13 +114,15 @@ fn main() {
 
     let pmesh = Plane::gen_mesh();
 
+    let num_planes = 100;
+
     let mut ps = Vec::new();
-    for i in range(0i, 20) {
+    for i in range(0i, num_planes) {
         //ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(0.2, 0.2, 0.2))));
         ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(1.0, 1.0, 1.0))));
     }
 
-    let w1 = 0.2;
+    let w1 = 0.05;
     let w2 = 10.0;
     let w3 = 0.2;
 
