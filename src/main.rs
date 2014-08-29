@@ -1,6 +1,7 @@
 extern crate native;
 extern crate kiss3d;
 extern crate nalgebra;
+extern crate debug; //to print out type of variable at runtime
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -17,6 +18,8 @@ use kiss3d::light;
 fn start(argc: int, argv: *const *const u8) -> int {
     native::start(argc, argv, main)
 }
+
+// reference: http://www.vergenet.net/~conrad/boids/pseudocode.html
 
 //TODO: check out recorder demo to create mpg's of simulations
 
@@ -51,16 +54,15 @@ impl Plane {
         let mut node = sn;
         node.set_color(1.0, 1.0, 1.0);
         node.enable_backface_culling(false);
-        let (x, z) = (rand::random::<f32>() * 5.0 - 2.5, rand::random::<f32>() * 5.0 - 2.5);
-        node.set_local_translation(Vec3::new(x, 2.0, z));
         node.set_points_size(1.0); //wireframe mode for plane
         node.set_lines_width(1.0);
         node.set_surface_rendering_activation(false);
 
+        let (x, z) = (rand::random::<f32>() * 5.0 - 2.5, rand::random::<f32>() * 5.0 - 2.5);
         let (vx, vz) = (rand::random::<f32>() * 4.0 - 2.0, rand::random::<f32>() * 4.0 - 2.0);
 
         Plane {
-            pos: Vec3::new(0.0, 2.0, 0.0),
+            pos: Vec3::new(x, 2.0, z),
             vel: Vec3::new(vx, 0.0, vz),
             acc: Vec3::new(0.0, 0.0, 0.0),
             node: node,
@@ -105,9 +107,36 @@ fn main() {
 
         draw_axis(&mut window);
 
-        for p in ps.mut_iter() {
-            p.update(curr_time - last_time);
+        let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
 
+        for i in range(0, ps.len()) {
+            // rule 1 : calculate center minus the current bird
+            let center_pos = (flock_total_pos - ps[i].pos) / (ps.len() as f32 - 1.0);
+            let r1_center_push: Vec3<f32> = center_pos - ps[i].pos; //un weighted rule
+
+            // rule 2 : steer away from nearby boids
+            let mut r2_collide_push: Vec3<f32> = na::zero();
+            for j in range(0, ps.len()) {
+                if i != j {
+                    let disp = ps[j].pos - ps[i].pos;
+                    if na::norm(&disp) < 0.5 { //TODO: figure out collide range
+                        r2_collide_push = r2_collide_push - disp;
+                    }
+                }
+            }
+
+            let mut r1_scaled: Vec3<f32> = r1_center_push;
+            r1_scaled.x = r1_scaled.x / 100.0;
+            r1_scaled.y = r1_scaled.y / 100.0;
+            r1_scaled.z = r1_scaled.z / 100.0;
+
+            ps.get_mut(i).vel = ps[i].vel + r1_scaled + r2_collide_push;
+
+            // rule 3 : match velocity of nearby birds
+        }
+
+        // step update
+        for p in ps.mut_iter() {
             p.acc.x =
                 if p.pos.x > 5.0 {
                     -2.0
@@ -125,6 +154,8 @@ fn main() {
                 } else {
                     0.0
                 };
+
+            p.update(curr_time - last_time);
         }
 
         last_time = curr_time;
