@@ -108,11 +108,18 @@ fn main() {
         draw_axis(&mut window);
 
         let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
+        let flock_total_vel = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.vel);
 
         for i in range(0, ps.len()) {
             // rule 1 : calculate center minus the current bird
             let center_pos = (flock_total_pos - ps[i].pos) / (ps.len() as f32 - 1.0);
             let r1_center_push: Vec3<f32> = center_pos - ps[i].pos; //un weighted rule
+
+            let mut r1_scaled = r1_center_push;
+            r1_scaled.x = r1_scaled.x / 100.0;
+            r1_scaled.y = r1_scaled.y / 100.0;
+            r1_scaled.z = r1_scaled.z / 100.0;
+
 
             // rule 2 : steer away from nearby boids
             let mut r2_collide_push: Vec3<f32> = na::zero();
@@ -125,14 +132,16 @@ fn main() {
                 }
             }
 
-            let mut r1_scaled: Vec3<f32> = r1_center_push;
-            r1_scaled.x = r1_scaled.x / 100.0;
-            r1_scaled.y = r1_scaled.y / 100.0;
-            r1_scaled.z = r1_scaled.z / 100.0;
-
-            ps.get_mut(i).vel = ps[i].vel + r1_scaled + r2_collide_push;
 
             // rule 3 : match velocity of nearby birds
+            let center_vel = (flock_total_vel - ps[i].vel) / (ps.len() as f32 - 1.0);
+            let r3_match_vel = center_vel - ps[i].vel;
+            let mut r3_scaled = r3_match_vel;
+            r3_scaled.x = r3_scaled.x / 20.0;
+            r3_scaled.y = r3_scaled.y / 20.0;
+            r3_scaled.z = r3_scaled.z / 20.0;
+
+            ps.get_mut(i).vel = ps[i].vel + r1_scaled + r2_collide_push + r3_scaled;
         }
 
         // step update
