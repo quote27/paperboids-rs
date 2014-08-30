@@ -96,6 +96,56 @@ impl Plane {
     }
 } 
 
+fn flock_center_v(ps: &Vec<Plane>, i: uint, look_radius: f32) -> Vec3<f32> {
+    let mut center_count = 0u;
+    let perceived_center = ps.iter()
+        .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
+        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { center_count += 1; a + p.pos });
+    center_count -= 1; // this is because the bird itself is caught by the filter
+
+    if center_count == 0 {
+        na::zero()
+    } else {
+        ((perceived_center - ps[i].pos) / center_count as f32) - ps[i].pos
+    }
+}
+
+fn keep_away_v(ps: &Vec<Plane>, i: uint, collide_radius: f32) -> Vec3<f32> {
+    let mut r2_collide_push: Vec3<f32> = na::zero();
+    let mut count_intersect  = 0u;
+    for j in range(0, ps.len()) {
+        if i != j {
+            let disp = ps[j].pos - ps[i].pos;
+            let dist = na::norm(&disp);
+            if dist < collide_radius {
+                let disp_norm_weight = disp / (dist * dist);
+                r2_collide_push = r2_collide_push - disp_norm_weight;
+                count_intersect += 1;
+            }
+        }
+    }
+    if count_intersect > 0 {
+        r2_collide_push = r2_collide_push / count_intersect as f32;
+    }
+    r2_collide_push
+
+}
+
+fn match_speed_v(ps: &Vec<Plane>, i: uint, look_radius: f32) -> Vec3<f32> {
+    let mut center_count = 0u;
+
+    let perceived_velocity = ps.iter()
+        .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
+        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { center_count += 1; a + p.vel });
+    center_count -= 1;
+
+    if center_count == 0 {
+        na::zero()
+    } else {
+        perceived_velocity / center_count as f32
+    }
+}
+
 fn main() {
     // have camera start from higher position
     let eye = Vec3::new(50.0, 50.0, 100.0);
@@ -135,79 +185,25 @@ fn main() {
         draw_axis(&mut window);
 
         //let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
-        //let flock_total_vel = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.vel);
-
-        //let flock_abs_center = flock_total_pos / (ps.len() as f32);
-        //window.draw_point(&flock_abs_center, &Vec3::new(0.0, 1.0, 0.0));
 
         for i in range(0, ps.len()) {
-            // rule 1 : calculate center minus the current bird
-            let mut center_count = 0u;
-            let center_pos = ps.iter()
-                .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
-                .fold(na::zero::<Vec3<f32>>(), |a, ref p| { center_count += 1; a + p.pos });
-            center_count -= 1; // this is because the bird itself will be added
-
-//            let (center_pos, neighbor_count) = ps.iter()
-//                .fold((na::zero::<Vec3<f32>>(), 0), |(a, count), ref p| if na::norm(&(p.pos - ps[i].pos)) < look_radius { (a + p.pos, count+1) } else { (a,count) });
-            //let center_pos = (flock_total_pos - ps[i].pos) / (ps.len() as f32 - 1.0);
-            let r1_center_push =
-                if center_count == 0 {
-                    na::zero()
-                } else {
-                    ((center_pos - ps[i].pos) / center_count as f32) - ps[i].pos //un weighted rule
-                };
-
-            let mut r1_scaled = r1_center_push;
+            let mut r1_scaled = flock_center_v(&ps, i, look_radius);
             r1_scaled.x *= w1;
             r1_scaled.y *= w1;
             r1_scaled.z *= w1;
+            window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
 
-            //window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
-
-            // rule 2 : steer away from nearby boids
-            let mut r2_collide_push: Vec3<f32> = na::zero();
-            let mut count_intersect  = 0u;
-            for j in range(0, ps.len()) {
-                if i != j {
-                    let disp = ps[j].pos - ps[i].pos;
-                    let dist = na::norm(&disp);
-                    if dist < collide_radius {
-                        let disp_norm_weight = disp / (dist * dist);
-                        r2_collide_push = r2_collide_push - disp_norm_weight;
-                        count_intersect += 1;
-                    }
-                }
-            }
-            if count_intersect > 0 {
-                r2_collide_push = r2_collide_push / count_intersect as f32;
-            }
-
-            let mut r2_scaled = r2_collide_push;
+            let mut r2_scaled = keep_away_v(&ps, i, collide_radius);
             r2_scaled.x *= w2;
             r2_scaled.y *= w2;
             r2_scaled.z *= w2;
+            window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
 
-            //window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
-
-            // rule 3 : match velocity of nearby birds
-            //let center_vel = (flock_total_vel - ps[i].vel) / (ps.len() as f32 - 1.0);
-            //let r3_match_vel = na::normalize(&center_vel) - ps[i].vel;
-
-            let r3_match_vel = ps.iter()
-                .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
-                .fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.vel);
-            let mut r3_scaled =
-                if center_count == 0 {
-                    na::zero()
-                } else {
-                    r3_match_vel / center_count as f32
-                };
+            let mut r3_scaled = match_speed_v(&ps, i, look_radius);
             r3_scaled.x *= w3;
             r3_scaled.y *= w3;
             r3_scaled.z *= w3;
-
-            //window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
+            window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
 
             ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled;
         }
