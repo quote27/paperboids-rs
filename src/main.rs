@@ -58,31 +58,31 @@ impl Plane {
         node.set_lines_width(1.0);
         node.set_surface_rendering_activation(false);
 
-        let mut cyl = node.add_cylinder(5.0, 0.0);
-        cyl.append_translation(&Vec3::new(0.0, -0.1, 0.0));
-        cyl.set_color(0.5, 0.5, 0.5);
-        cyl.enable_backface_culling(true);
-        cyl.set_points_size(1.0); //wireframe mode for plane
-        cyl.set_lines_width(1.0);
-        cyl.set_surface_rendering_activation(false);
+//        let mut cyl = node.add_cylinder(5.0, 0.0);
+//        cyl.append_translation(&Vec3::new(0.0, -0.1, 0.0));
+//        cyl.append_rotation(&Vec3::new(0.0, (90.0f32).to_radians(), 0.0));
+//        cyl.set_color(0.5, 0.5, 0.5);
+//        cyl.enable_backface_culling(true);
+//        cyl.set_points_size(1.0); //wireframe mode for plane
+//        cyl.set_lines_width(1.0);
+//        cyl.set_surface_rendering_activation(false);
 
         let (x, z) = (rand::random::<f32>() * 50.0 - 25.0, rand::random::<f32>() * 50.0 - 25.0);
         let (vx, vz) = (rand::random::<f32>() * 40.0 - 20.0, rand::random::<f32>() * 40.0 - 20.0);
+        let (y, vy) = (rand::random::<f32>() * 20.0 - 10.0 + 20.0, rand::random::<f32>() * 10.0 - 5.0);
 
         Plane {
-            pos: Vec3::new(x, 20.0, z),
-            vel: Vec3::new(vx, 0.0, vz),
+            pos: Vec3::new(x, y, z),
+            vel: Vec3::new(vx, vy, vz),
             acc: Vec3::new(0.0, 0.0, 0.0),
             node: node,
         }
     }
 
     fn update(&mut self, dt: f32) {
-        let dtv = Vec3::new(dt, dt, dt);
-
         self.vel = self.vel + self.acc * dt;
 
-        let max_speed = 10.0;
+        let max_speed = 20.0;
         let min_speed = 2.0;
         let curr_speed = na::norm(&self.vel);
         if curr_speed > max_speed {
@@ -96,8 +96,6 @@ impl Plane {
     }
 } 
 
-
-
 fn main() {
     // have camera start from higher position
     let eye = Vec3::new(50.0, 50.0, 100.0);
@@ -110,11 +108,11 @@ fn main() {
 
     let mut ground = window.add_quad(100.0, 100.0, 1, 1);
     ground.set_local_rotation(Vec3::new((90.0f32).to_radians(), 0.0, 0.0));
-    ground.set_color(0.2, 0.2, 0.2);
+    ground.set_color(0.1, 0.1, 0.1);
 
     let pmesh = Plane::gen_mesh();
 
-    let num_planes = 100;
+    let num_planes = 500;
 
     let mut ps = Vec::new();
     for i in range(0i, num_planes) {
@@ -122,9 +120,12 @@ fn main() {
         ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(1.0, 1.0, 1.0))));
     }
 
-    let w1 = 0.05;
-    let w2 = 10.0;
-    let w3 = 0.2;
+    let w1 = 0.5;
+    let w2 = 50.0;
+    let w3 = 0.5;
+
+    let look_radius = 20.0;
+    let collide_radius = 10.0; // TODO: figure out collide radius
 
     let mut last_time = window.context().get_time() as f32;
     let mut curr_time;
@@ -133,23 +134,36 @@ fn main() {
 
         draw_axis(&mut window);
 
-        let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
-        let flock_total_vel = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.vel);
+        //let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
+        //let flock_total_vel = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.vel);
 
-        let flock_abs_center = flock_total_pos / (ps.len() as f32);
-        window.draw_point(&flock_abs_center, &Vec3::new(0.0, 1.0, 0.0));
+        //let flock_abs_center = flock_total_pos / (ps.len() as f32);
+        //window.draw_point(&flock_abs_center, &Vec3::new(0.0, 1.0, 0.0));
 
         for i in range(0, ps.len()) {
             // rule 1 : calculate center minus the current bird
-            let center_pos = (flock_total_pos - ps[i].pos) / (ps.len() as f32 - 1.0);
-            let r1_center_push = center_pos - ps[i].pos; //un weighted rule
+            let mut center_count = 0u;
+            let center_pos = ps.iter()
+                .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
+                .fold(na::zero::<Vec3<f32>>(), |a, ref p| { center_count += 1; a + p.pos });
+            center_count -= 1; // this is because the bird itself will be added
+
+//            let (center_pos, neighbor_count) = ps.iter()
+//                .fold((na::zero::<Vec3<f32>>(), 0), |(a, count), ref p| if na::norm(&(p.pos - ps[i].pos)) < look_radius { (a + p.pos, count+1) } else { (a,count) });
+            //let center_pos = (flock_total_pos - ps[i].pos) / (ps.len() as f32 - 1.0);
+            let r1_center_push =
+                if center_count == 0 {
+                    na::zero()
+                } else {
+                    ((center_pos - ps[i].pos) / center_count as f32) - ps[i].pos //un weighted rule
+                };
 
             let mut r1_scaled = r1_center_push;
             r1_scaled.x *= w1;
             r1_scaled.y *= w1;
             r1_scaled.z *= w1;
 
-            window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
+            //window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
 
             // rule 2 : steer away from nearby boids
             let mut r2_collide_push: Vec3<f32> = na::zero();
@@ -158,8 +172,8 @@ fn main() {
                 if i != j {
                     let disp = ps[j].pos - ps[i].pos;
                     let dist = na::norm(&disp);
-                    if dist < 5.0 { //TODO: figure out collide range
-                        let disp_norm_weight = na::normalize(&disp) / (dist * dist);
+                    if dist < collide_radius {
+                        let disp_norm_weight = disp / (dist * dist);
                         r2_collide_push = r2_collide_push - disp_norm_weight;
                         count_intersect += 1;
                     }
@@ -174,24 +188,33 @@ fn main() {
             r2_scaled.y *= w2;
             r2_scaled.z *= w2;
 
-            window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
+            //window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
 
             // rule 3 : match velocity of nearby birds
-            let center_vel = (flock_total_vel - ps[i].vel) / (ps.len() as f32 - 1.0);
-            let r3_match_vel = na::normalize(&center_vel) - ps[i].vel;
-            let mut r3_scaled = r3_match_vel;
+            //let center_vel = (flock_total_vel - ps[i].vel) / (ps.len() as f32 - 1.0);
+            //let r3_match_vel = na::normalize(&center_vel) - ps[i].vel;
+
+            let r3_match_vel = ps.iter()
+                .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
+                .fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.vel);
+            let mut r3_scaled =
+                if center_count == 0 {
+                    na::zero()
+                } else {
+                    r3_match_vel / center_count as f32
+                };
             r3_scaled.x *= w3;
             r3_scaled.y *= w3;
             r3_scaled.z *= w3;
 
-            window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
+            //window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
 
             ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled;
         }
 
         // step update
         for p in ps.mut_iter() {
-            p.acc.x =
+            p.acc.x +=
                 if p.pos.x > 50.0 {
                     -20.0
                 } else if p.pos.x < -50.0 {
@@ -200,7 +223,7 @@ fn main() {
                     p.acc.x
                 };
 
-            p.acc.z =
+            p.acc.z +=
                 if p.pos.z > 50.0 {
                     -20.0
                 } else if p.pos.z < -50.0 {
