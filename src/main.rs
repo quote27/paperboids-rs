@@ -21,7 +21,7 @@ fn start(argc: int, argv: *const *const u8) -> int {
 
 // reference: http://www.vergenet.net/~conrad/boids/pseudocode.html
 
-//TODO: check out recorder demo to create mpg's of simulations
+// TODO: check out recorder demo to create mpg's of simulations
 
 struct Plane {
     pos: Vec3<f32>,
@@ -69,17 +69,17 @@ impl Plane {
         Plane {
             pos: Vec3::new(x, y, z),
             vel: Vec3::new(vx, vy, vz),
-            acc: Vec3::new(0.0, 0.0, 0.0),
+            acc: na::zero(),
             node: node,
         }
     }
 
     fn update(&mut self, dt: f32) {
-        self.vel = self.vel + self.acc * dt;
-
-        let world_scale = 0.2;
+        let world_scale = 0.5; // TODO: figure out where to put these constants
         let max_speed = 20.0 * world_scale;
         let min_speed = 2.0 * world_scale;
+
+        self.vel = self.vel + self.acc * dt;
         let curr_speed = na::norm(&self.vel);
         if curr_speed > max_speed {
             self.vel = self.vel / curr_speed * max_speed;
@@ -88,7 +88,7 @@ impl Plane {
         }
 
         self.pos = self.pos + self.vel * dt;
-        self.node.look_at_z(&self.pos, &(self.pos + self.vel), &Vec3::y());
+        self.node.look_at_z(&self.pos, &(self.pos + self.vel), &Vec3::y()); // TODO: figure out up vector for banking
     }
 } 
 
@@ -128,17 +128,16 @@ fn keep_away_v(ps: &Vec<Plane>, i: uint, collide_radius: f32) -> Vec3<f32> {
 }
 
 fn match_speed_v(ps: &Vec<Plane>, i: uint, look_radius: f32) -> Vec3<f32> {
-    let mut center_count = 0u;
-
+    let mut neighbors = 0u;
     let perceived_velocity = ps.iter()
         .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
-        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { center_count += 1; a + p.vel });
-    center_count -= 1;
+        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { neighbors += 1; a + p.vel });
+    neighbors -= 1; // this is because the bird itself is caught in the filter
 
-    if center_count == 0 {
+    if neighbors == 0 {
         na::zero()
     } else {
-        na::normalize(&(perceived_velocity / center_count as f32))
+        na::normalize(&(perceived_velocity / neighbors as f32))
     }
 }
 
@@ -181,80 +180,93 @@ fn bounds_v(ps: &Vec<Plane>, i: uint) -> Vec3<f32> {
 }
 
 fn main() {
-    let world_scale = 0.2;
-    // have camera start from higher position
-    let eye = Vec3::new(50.0, 50.0, 100.0);
-    let at = na::one();
-    let mut arc_ball = ArcBall::new(eye, at);
-
     let mut window = Window::new("Kiss3d: cube");
     window.set_framerate_limit(Some(60));
     window.set_light(light::StickToCamera);
 
-    let mut ground = window.add_quad(100.0, 100.0, 1, 1);
-    ground.set_local_rotation(Vec3::new((90.0f32).to_radians(), 0.0, 0.0));
-    ground.set_color(0.1, 0.1, 0.1);
+    let debug = false;
+    let follow_first_bird = false;
+    let world_dim = Vec3::new(100.0f32, 100.0, 100.0);
+    let world_scale = 0.5;
+    let look_radius = 20.0 * world_scale;
+    let collide_radius = 10.0 * world_scale; // TODO: figure out a good collide radius
 
-    let pmesh = Plane::gen_mesh();
+    let eye = Vec3::new(world_dim.x/2.0, world_dim.y/2.0, world_dim.z);
+    let at = na::one();
+    let mut arc_ball = ArcBall::new(eye, at);
 
+    let w1: f32 = 8.0;  // flock centering
+    let w2: f32 = 12.0; // collision avoidance
+    let w3: f32 = 8.0;  // match velocity
+    let w4: f32 = 20.0; // bounds push
+    
     let num_planes = 500;
 
+    // TODO: make ground cooler - random heightmap?
+    let mut ground = window.add_quad(world_dim.x, world_dim.z, 1, 1);
+    ground.set_local_rotation(Vec3::new(std::num::Float::frac_pi_2(), 0.0, 0.0));
+    ground.set_color(0.1, 0.1, 0.1);
+
+    // TODO: obstacle meshes
+
+    let pmesh = Plane::gen_mesh();
     let mut ps = Vec::new();
     for i in range(0i, num_planes) {
         ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(world_scale, world_scale, world_scale))));
     }
 
-    let w1 = 8.0;
-    let w2 = 12.0;
-    let w3 = 8.0;
-    let w4 = 20.0;
-
-    let debug = false;
-
-    let look_radius = 20.0 * world_scale;
-    let collide_radius = 10.0 * world_scale; // TODO: figure out collide radius
-
-    let mut last_time = window.context().get_time() as f32;
+    let mut last_time = window.context().get_time();
     let mut curr_time;
+    let mut times: [f64, ..5];
+    let mut t_tmp;
     while window.render_with_camera(&mut arc_ball) {
-        curr_time = window.context().get_time() as f32;
-
-        draw_axis(&mut window);
+        let f_start = window.context().get_time();
+        curr_time = window.context().get_time();
 
         //let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
-
+        times = [0.0, 0.0, 0.0, 0.0, 0.0];
         for i in range(0, ps.len()) {
-            let mut r1_scaled = flock_center_v(&ps, i, look_radius);
-            r1_scaled.x *= w1;
-            r1_scaled.y *= w1;
-            r1_scaled.z *= w1;
-            if debug { window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0)); }
+            t_tmp = window.context().get_time();
+            let r1_scaled = flock_center_v(&ps, i, look_radius) * w1;
+            times[0] += window.context().get_time() - t_tmp;
 
-            let mut r2_scaled = keep_away_v(&ps, i, collide_radius);
-            r2_scaled.x *= w2;
-            r2_scaled.y *= w2;
-            r2_scaled.z *= w2;
-            if debug { window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0)); }
+            t_tmp = window.context().get_time();
+            let r2_scaled = keep_away_v(&ps, i, collide_radius) * w2;
+            times[1] += window.context().get_time() - t_tmp;
 
-            let mut r3_scaled = match_speed_v(&ps, i, look_radius);
-            r3_scaled.x *= w3;
-            r3_scaled.y *= w3;
-            r3_scaled.z *= w3;
-            if debug { window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0)); }
+            t_tmp = window.context().get_time();
+            let r3_scaled = match_speed_v(&ps, i, look_radius) * w3;
+            times[2] += window.context().get_time() - t_tmp;
 
-            let mut r4_scaled = bounds_v(&ps, i);
-            r4_scaled.x *= w4;
-            r4_scaled.y *= w4;
-            r4_scaled.z *= w4;
-            if debug { window.draw_line(&ps[i].pos, &(ps[i].pos + r4_scaled), &Vec3::new(1.0, 1.0, 0.0)); }
+            t_tmp = window.context().get_time();
+            let r4_scaled = bounds_v(&ps, i) * w4;
+            times[3] += window.context().get_time() - t_tmp;
+
+            if debug {
+                window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
+                window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
+                window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
+                window.draw_line(&ps[i].pos, &(ps[i].pos + r4_scaled), &Vec3::new(1.0, 1.0, 0.0));
+            }
 
             ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled + r4_scaled;
         }
 
+        t_tmp = window.context().get_time();
+        let dt  = (curr_time - last_time) as f32;
         for p in ps.mut_iter() {
-            p.update(curr_time - last_time);
+            p.update(dt);
+        }
+        times[4] = window.context().get_time() - t_tmp;
+
+        if follow_first_bird {
+            arc_ball.look_at_z(ps[0].pos, ps[0].pos + ps[0].vel);
         }
 
+        draw_axis(&mut window);
+
+        let f_end = window.context().get_time();
+        println!("frame: {}, sub: {} {} {} {}, update: {}", f_end - f_start, times[0], times[1], times[2], times[3], times[4]);
         last_time = curr_time;
     }
 }
