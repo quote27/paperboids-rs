@@ -6,7 +6,7 @@ extern crate debug; //to print out type of variable at runtime
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::rand;
-use nalgebra::na::Vec3;
+use nalgebra::na::{Vec2, Vec3};
 use nalgebra::na;
 use kiss3d::window::Window;
 use kiss3d::camera::ArcBall;
@@ -22,6 +22,8 @@ fn start(argc: int, argv: *const *const u8) -> int {
 // reference: http://www.vergenet.net/~conrad/boids/pseudocode.html
 
 // TODO: check out recorder demo to create mpg's of simulations
+
+// TODO: opt; instead of filtering at every rule, do one filter pass and call each of the rules
 
 struct Plane {
     pos: Vec3<f32>,
@@ -178,15 +180,36 @@ fn bounds_v(ps: &Vec<Plane>, i: uint) -> Vec3<f32> {
     }
 }
 
-fn avoid_objects_v(ps: &Vec<Plane>, i: uint, collide_radius: f32, sphere_pos: &Vec3<f32>) -> Vec3<f32> {
+fn avoid_spheres_v(ps: &Vec<Plane>, i: uint, collide_radius: f32, sphere_pos: &Vec3<f32>, sphere_r: f32) -> Vec3<f32> {
     let disp = *sphere_pos - ps[i].pos;
-    let dist = na::norm(&disp) - 2.0; //subtract radius of sphere
+    let dist = na::norm(&disp) - sphere_r; //subtract radius of sphere
     if dist < collide_radius {
         -disp / (dist * dist)
     } else {
         na::zero()
     }
 }
+
+fn avoid_cylinder_v(ps: &Vec<Plane>, i: uint, collide_radius: f32, cyl_pos: &Vec3<f32>, cyl_h: f32, cyl_r: f32) -> Vec3<f32> {
+    let p = &ps[i];
+    let hh = cyl_h / 2.0;
+    if p.pos.y < cyl_pos.y + hh && p.pos.y > cyl_pos.y - hh {
+        let p2d = Vec2::new(p.pos.x, p.pos.z);
+        let c2d = Vec2::new(cyl_pos.x, cyl_pos.z);
+
+        let disp = c2d - p2d;
+        let dist = na::norm(&disp) - cyl_r; //subtract radius of sphere
+        if dist < collide_radius {
+            let v = -disp / (dist * dist);
+            Vec3::new(v.x, 0.0, v.y)
+        } else {
+            na::zero()
+        }
+    } else {
+        na::zero()
+    }
+}
+
 
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
@@ -218,7 +241,8 @@ fn main() {
     ground.set_color(0.1, 0.1, 0.1);
 
     // TODO: obstacle meshes
-    let mut sph1 = window.add_sphere(2.0);
+    let sph_radius = 2.0;
+    let mut sph1 = window.add_sphere(sph_radius);
     let sph1_pos = Vec3::new(0.0, 15.0, 0.0);
     sph1.set_local_translation(sph1_pos);
     sph1.set_color(1.0, 0.0, 0.0);
@@ -226,13 +250,29 @@ fn main() {
     sph1.set_lines_width(1.0);
     sph1.set_surface_rendering_activation(false);
 
-    let mut sph2 = window.add_sphere(2.0);
+    let mut sph2 = window.add_sphere(sph_radius);
     let sph2_pos = Vec3::new(30.0, 10.0, 0.0);
     sph2.set_local_translation(sph2_pos);
     sph2.set_color(1.0, 0.0, 0.0);
     sph2.set_points_size(1.0); //wireframe mode for plane
     sph2.set_lines_width(1.0);
     sph2.set_surface_rendering_activation(false);
+
+    let mut cyl1 = window.add_cylinder(2.0, 40.0);
+    let cyl1_pos = Vec3::new(-20.0, 20.0, -20.0);
+    cyl1.set_local_translation(cyl1_pos);
+    cyl1.set_color(1.0, 0.0, 0.0);
+    cyl1.set_points_size(1.0); //wireframe mode for plane
+    cyl1.set_lines_width(1.0);
+    cyl1.set_surface_rendering_activation(false);
+
+    let mut cyl2 = window.add_cylinder(2.0, 40.0);
+    let cyl2_pos = Vec3::new(-20.0, 20.0, 45.0);
+    cyl2.set_local_translation(cyl2_pos);
+    cyl2.set_color(1.0, 0.0, 0.0);
+    cyl2.set_points_size(1.0); //wireframe mode for plane
+    cyl2.set_lines_width(1.0);
+    cyl2.set_surface_rendering_activation(false);
 
 
     let pmesh = Plane::gen_mesh();
@@ -269,8 +309,10 @@ fn main() {
             times[3] += window.context().get_time() - t_tmp;
 
             t_tmp = window.context().get_time();
-            let mut r5_scaled = avoid_objects_v(&ps, i, collide_radius, &sph1_pos) * w5;
-            r5_scaled = r5_scaled + avoid_objects_v(&ps, i, collide_radius, &sph2_pos) * w5;
+            let mut r5_scaled = avoid_spheres_v(&ps, i, collide_radius, &sph1_pos, sph_radius) * w5;
+            r5_scaled = r5_scaled + avoid_spheres_v(&ps, i, collide_radius, &sph2_pos, sph_radius) * w5;
+            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl1_pos, 40.0, 2.0) * w5;
+            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl2_pos, 40.0, 2.0) * w5;
             times[4] += window.context().get_time() - t_tmp;
 
             if debug {
