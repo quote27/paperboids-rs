@@ -142,9 +142,8 @@ fn match_speed_v(ps: &Vec<Plane>, i: uint, look_radius: f32) -> Vec3<f32> {
     }
 }
 
-fn bounds_v(ps: &Vec<Plane>, i: uint) -> Vec3<f32> {
+fn bounds_v(p: &Plane) -> Vec3<f32> {
     let mut bounds: Vec3<f32> = na::zero();
-    let p = &ps[i];
 
     bounds.x =
         if p.pos.x > 50.0 {
@@ -180,27 +179,26 @@ fn bounds_v(ps: &Vec<Plane>, i: uint) -> Vec3<f32> {
     }
 }
 
-fn avoid_spheres_v(ps: &Vec<Plane>, i: uint, collide_radius: f32, sphere_pos: &Vec3<f32>, sphere_r: f32) -> Vec3<f32> {
-    let disp = *sphere_pos - ps[i].pos;
-    let dist = na::norm(&disp) - sphere_r; //subtract radius of sphere
-    if dist < collide_radius {
-        -disp / (dist * dist)
+fn avoid_spheres_v(p: &Plane, collide_radius2: f32, sphere_pos: &Vec3<f32>, sphere_r: f32) -> Vec3<f32> {
+    let disp = *sphere_pos - p.pos;
+    let dist2 = na::sqnorm(&disp) - sphere_r * sphere_r; //subtract radius of sphere
+    if dist2 < collide_radius2 {
+        -disp / dist2
     } else {
         na::zero()
     }
 }
 
-fn avoid_cylinder_v(ps: &Vec<Plane>, i: uint, collide_radius: f32, cyl_pos: &Vec3<f32>, cyl_h: f32, cyl_r: f32) -> Vec3<f32> {
-    let p = &ps[i];
+fn avoid_cylinder_v(p: &Plane, collide_radius2: f32, cyl_pos: &Vec3<f32>, cyl_h: f32, cyl_r: f32) -> Vec3<f32> {
     let hh = cyl_h / 2.0;
     if p.pos.y < cyl_pos.y + hh && p.pos.y > cyl_pos.y - hh {
         let p2d = Vec2::new(p.pos.x, p.pos.z);
         let c2d = Vec2::new(cyl_pos.x, cyl_pos.z);
 
         let disp = c2d - p2d;
-        let dist = na::norm(&disp) - cyl_r; //subtract radius of sphere
-        if dist < collide_radius {
-            let v = -disp / (dist * dist);
+        let dist2 = na::sqnorm(&disp) - cyl_r; //subtract radius of sphere
+        if dist2 < collide_radius2 {
+            let v = -disp / dist2;
             Vec3::new(v.x, 0.0, v.y)
         } else {
             na::zero()
@@ -223,16 +221,21 @@ fn main() {
     let look_radius = 20.0 * world_scale;
     let collide_radius = 10.0 * world_scale; // TODO: figure out a good collide radius
 
+    let look_radius2 = look_radius * look_radius; // can avoid squareroot for dist calculations
+    let collide_radius2 = collide_radius * collide_radius;
+
     let eye = Vec3::new(world_dim.x/2.0, world_dim.y/2.0, world_dim.z);
     let at = na::one();
     let mut arc_ball = ArcBall::new(eye, at);
 
-    let w1: f32 = 8.0;  // flock centering
-    let w2: f32 = 12.0; // collision avoidance
-    let w3: f32 = 8.0;  // match velocity
-    let w4: f32 = 20.0; // bounds push
-    let w5: f32 = 10.0; // avoid sphere
-    
+    let weights: [f32, ..5] = [
+        0.0,  // flock centering
+        12.0, // collision avoidance
+        8.0,  // match velocity
+        20.0, // bounds push
+        20.0, // avoid sphere
+    ];
+
     let num_planes = 500;
 
     // TODO: make ground cooler - random heightmap?
@@ -292,37 +295,122 @@ fn main() {
         //let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
         times = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         for i in range(0, ps.len()) {
-            t_tmp = window.context().get_time();
-            let r1_scaled = flock_center_v(&ps, i, look_radius) * w1;
-            times[0] += window.context().get_time() - t_tmp;
+            let mut neighbors = 0u;
+            let mut colliders = 0u;
 
-            t_tmp = window.context().get_time();
-            let r2_scaled = keep_away_v(&ps, i, collide_radius) * w2;
-            times[1] += window.context().get_time() - t_tmp;
+            // rules - overloaded vecter for rules to accumulate and average:
+            // 0. center
+            // 1. keep away
+            // 2. follow
+            // 3. bounds
+            // 4. avoid obstacles
+            let mut rules: [Vec3<f32>, ..5] = [na::zero(), na::zero(), na::zero(), na::zero(), na::zero()];
 
-            t_tmp = window.context().get_time();
-            let r3_scaled = match_speed_v(&ps, i, look_radius) * w3;
-            times[2] += window.context().get_time() - t_tmp;
+            {
+                let p = &ps[i];
 
-            t_tmp = window.context().get_time();
-            let r4_scaled = bounds_v(&ps, i) * w4;
-            times[3] += window.context().get_time() - t_tmp;
+                for j in range(0, ps.len()) {
+                    if i == j { continue; }
 
-            t_tmp = window.context().get_time();
-            let mut r5_scaled = avoid_spheres_v(&ps, i, collide_radius, &sph1_pos, sph_radius) * w5;
-            r5_scaled = r5_scaled + avoid_spheres_v(&ps, i, collide_radius, &sph2_pos, sph_radius) * w5;
-            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl1_pos, 40.0, 2.0) * w5;
-            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl2_pos, 40.0, 2.0) * w5;
-            times[4] += window.context().get_time() - t_tmp;
+                    let o = &ps[j];
 
-            if debug {
-                window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
-                window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
-                window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
-                window.draw_line(&ps[i].pos, &(ps[i].pos + r4_scaled), &Vec3::new(1.0, 1.0, 0.0));
+                    let disp = o.pos - p.pos;
+                    let dist2 = na::sqnorm(&disp);
+
+                    if dist2 < look_radius2 {
+                        neighbors += 1;
+
+                        // rule 0 - fly to center
+                        rules[0] = rules[0] + o.pos;
+
+                        // rule 2 - fly in the same direction
+                        rules[2] = rules[2] + o.vel;
+
+                        // rule 1 - avoid others
+                        if dist2 < collide_radius2 {
+                            colliders += 1;
+                            rules[1] = rules[1] - (disp / dist2);
+                        }
+                    }
+                }
+
+                if neighbors > 0 {
+                    rules[0] = na::normalize(&(rules[0] / neighbors as f32 - p.pos)) * weights[0];
+                    rules[2] = na::normalize(&(rules[2] / neighbors as f32)) * weights[2];
+                }
+                if colliders > 0 {
+                    rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
+                }
+
+                rules[3] = bounds_v(p) * weights[3];
+
+                rules[4] =
+                    avoid_spheres_v(p, collide_radius2, &sph1_pos, sph_radius) +
+                    avoid_spheres_v(p, collide_radius2, &sph2_pos, sph_radius) +
+                    avoid_cylinder_v(p, collide_radius2, &cyl1_pos, 40.0, 2.0) +
+                    avoid_cylinder_v(p, collide_radius2, &cyl2_pos, 40.0, 2.0);
+                if rules[4] != na::zero() {
+                    rules[4] = na::normalize(&rules[4]) * weights[4];
+                }
+
+                if debug {
+                    window.draw_line(&p.pos, &(p.pos + rules[0]), &Vec3::new(1.0, 0.0, 0.0));
+                    window.draw_line(&p.pos, &(p.pos + rules[1]), &Vec3::new(0.0, 1.0, 0.0));
+                    window.draw_line(&p.pos, &(p.pos + rules[2]), &Vec3::new(0.0, 1.0, 1.0));
+                    window.draw_line(&p.pos, &(p.pos + rules[3]), &Vec3::new(1.0, 1.0, 0.0));
+                    window.draw_line(&p.pos, &(p.pos + rules[4]), &Vec3::new(1.0, 0.0, 1.0));
+                }
             }
 
-            ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled + r4_scaled + r5_scaled;
+            let mut mag = 0.0; // magnitude
+            let max_mag2 = 100.0 * 100.0f32;
+
+            ps.get_mut(i).acc = na::zero();
+
+            for r in range(0, 5) {
+                let m = na::sqnorm(&rules[r]);
+
+                // if mag + m > max_mag2 {
+                //     break;
+                // }
+
+                mag += m;
+                ps.get_mut(i).acc = ps.get_mut(i).acc + rules[r];
+            }
+            //rules[0] + rules[1] + rules[2] + rules[3] + rules[4];
+
+
+//            t_tmp = window.context().get_time();
+//            let r1_scaled = flock_center_v(&ps, i, look_radius) * weights[0];
+//            times[0] += window.context().get_time() - t_tmp;
+//
+//            t_tmp = window.context().get_time();
+//            let r2_scaled = keep_away_v(&ps, i, collide_radius) * weights[1];
+//            times[1] += window.context().get_time() - t_tmp;
+//
+//            t_tmp = window.context().get_time();
+//            let r3_scaled = match_speed_v(&ps, i, look_radius) * weights[2];
+//            times[2] += window.context().get_time() - t_tmp;
+//
+//            t_tmp = window.context().get_time();
+//            let r4_scaled = bounds_v(&ps[i]) * weights[3];
+//            times[3] += window.context().get_time() - t_tmp;
+//
+//            t_tmp = window.context().get_time();
+//            let mut r5_scaled = avoid_spheres_v(&ps, i, collide_radius, &sph1_pos, sph_radius) * weights[4];
+//            r5_scaled = r5_scaled + avoid_spheres_v(&ps, i, collide_radius, &sph2_pos, sph_radius) * weights[4];
+//            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl1_pos, 40.0, 2.0) * weights[4];
+//            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl2_pos, 40.0, 2.0) * weights[4];
+//            times[4] += window.context().get_time() - t_tmp;
+//
+//            if debug {
+//                window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
+//                window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
+//                window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
+//                window.draw_line(&ps[i].pos, &(ps[i].pos + r4_scaled), &Vec3::new(1.0, 1.0, 0.0));
+//            }
+//
+//            ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled + r4_scaled + r5_scaled;
         }
 
         t_tmp = window.context().get_time();
