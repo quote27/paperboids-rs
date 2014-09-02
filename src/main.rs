@@ -124,7 +124,6 @@ fn keep_away_v(ps: &Vec<Plane>, i: uint, collide_radius: f32) -> Vec3<f32> {
         keep_away = na::normalize(&(keep_away / neighbors as f32));
     }
     keep_away
-
 }
 
 fn match_speed_v(ps: &Vec<Plane>, i: uint, look_radius: f32) -> Vec3<f32> {
@@ -155,7 +154,7 @@ fn bounds_v(ps: &Vec<Plane>, i: uint) -> Vec3<f32> {
         };
 
     bounds.y =
-        if p.pos.y > 20.0 {
+        if p.pos.y > 40.0 {
             -1.0
         } else if p.pos.y < 5.0 {
             1.0
@@ -179,6 +178,16 @@ fn bounds_v(ps: &Vec<Plane>, i: uint) -> Vec3<f32> {
     }
 }
 
+fn avoid_objects_v(ps: &Vec<Plane>, i: uint, collide_radius: f32, sphere_pos: &Vec3<f32>) -> Vec3<f32> {
+    let disp = *sphere_pos - ps[i].pos;
+    let dist = na::norm(&disp) - 2.0; //subtract radius of sphere
+    if dist < collide_radius {
+        -disp / (dist * dist)
+    } else {
+        na::zero()
+    }
+}
+
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
     window.set_framerate_limit(Some(60));
@@ -199,6 +208,7 @@ fn main() {
     let w2: f32 = 12.0; // collision avoidance
     let w3: f32 = 8.0;  // match velocity
     let w4: f32 = 20.0; // bounds push
+    let w5: f32 = 10.0; // avoid sphere
     
     let num_planes = 500;
 
@@ -208,6 +218,22 @@ fn main() {
     ground.set_color(0.1, 0.1, 0.1);
 
     // TODO: obstacle meshes
+    let mut sph1 = window.add_sphere(2.0);
+    let sph1_pos = Vec3::new(0.0, 15.0, 0.0);
+    sph1.set_local_translation(sph1_pos);
+    sph1.set_color(1.0, 0.0, 0.0);
+    sph1.set_points_size(1.0); //wireframe mode for plane
+    sph1.set_lines_width(1.0);
+    sph1.set_surface_rendering_activation(false);
+
+    let mut sph2 = window.add_sphere(2.0);
+    let sph2_pos = Vec3::new(30.0, 10.0, 0.0);
+    sph2.set_local_translation(sph2_pos);
+    sph2.set_color(1.0, 0.0, 0.0);
+    sph2.set_points_size(1.0); //wireframe mode for plane
+    sph2.set_lines_width(1.0);
+    sph2.set_surface_rendering_activation(false);
+
 
     let pmesh = Plane::gen_mesh();
     let mut ps = Vec::new();
@@ -217,14 +243,14 @@ fn main() {
 
     let mut last_time = window.context().get_time();
     let mut curr_time;
-    let mut times: [f64, ..5];
+    let mut times: [f64, ..6];
     let mut t_tmp;
     while window.render_with_camera(&mut arc_ball) {
         let f_start = window.context().get_time();
         curr_time = window.context().get_time();
 
         //let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
-        times = [0.0, 0.0, 0.0, 0.0, 0.0];
+        times = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         for i in range(0, ps.len()) {
             t_tmp = window.context().get_time();
             let r1_scaled = flock_center_v(&ps, i, look_radius) * w1;
@@ -242,6 +268,11 @@ fn main() {
             let r4_scaled = bounds_v(&ps, i) * w4;
             times[3] += window.context().get_time() - t_tmp;
 
+            t_tmp = window.context().get_time();
+            let mut r5_scaled = avoid_objects_v(&ps, i, collide_radius, &sph1_pos) * w5;
+            r5_scaled = r5_scaled + avoid_objects_v(&ps, i, collide_radius, &sph2_pos) * w5;
+            times[4] += window.context().get_time() - t_tmp;
+
             if debug {
                 window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
                 window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
@@ -249,7 +280,7 @@ fn main() {
                 window.draw_line(&ps[i].pos, &(ps[i].pos + r4_scaled), &Vec3::new(1.0, 1.0, 0.0));
             }
 
-            ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled + r4_scaled;
+            ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled + r4_scaled + r5_scaled;
         }
 
         t_tmp = window.context().get_time();
@@ -257,7 +288,7 @@ fn main() {
         for p in ps.mut_iter() {
             p.update(dt);
         }
-        times[4] = window.context().get_time() - t_tmp;
+        times[5] = window.context().get_time() - t_tmp;
 
         if follow_first_bird {
             arc_ball.look_at_z(ps[0].pos, ps[0].pos + ps[0].vel);
@@ -266,7 +297,7 @@ fn main() {
         draw_axis(&mut window);
 
         let f_end = window.context().get_time();
-        println!("frame: {}, sub: {} {} {} {}, update: {}", f_end - f_start, times[0], times[1], times[2], times[3], times[4]);
+        println!("frame: {}, sub: {} {} {} {} {}, update: {}", f_end - f_start, times[0], times[1], times[2], times[3], times[4], times[5]);
         last_time = curr_time;
     }
 }
