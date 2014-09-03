@@ -173,7 +173,7 @@ fn main() {
     let debug = false;
     let follow_first_bird = false;
     let world_dim = Vec3::new(100.0f32, 100.0, 100.0);
-    let world_scale = 0.2;
+    let world_scale = 0.5;
     let look_radius = 30.0 * world_scale;
     let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
 
@@ -185,11 +185,11 @@ fn main() {
     let mut arc_ball = ArcBall::new(eye, at);
 
     let weights: [f32, ..5] = [
-        20.0, // avoid obstacles
+        30.0, // avoid obstacles
         12.0, // collision avoidance
         8.0,  // flock centering
         8.0,  // match velocity
-        10.0, // bounds push
+        20.0, // bounds push
     ];
 
     let num_planes = 500;
@@ -321,7 +321,7 @@ fn main() {
             }
 
             let mut mag = 0.0; // magnitude
-            let max_mag = 100.0;
+            let max_mag = 50.0;
 
             ps.get_mut(i).acc = na::zero();
 
@@ -329,9 +329,13 @@ fn main() {
                 // TODO: minor optimization? use non-sqrt norm
                 let m = na::norm(&rules[r]);
 
+                if m == 0.0 { continue; }
+
                 if mag + m > max_mag {
                     // rebalance last rule
                     rules[r] = rules[r] * ((max_mag - mag) / m);
+                    ps.get_mut(i).acc = ps.get_mut(i).acc + rules[r];
+                    break;
                 }
 
                 mag += m;
