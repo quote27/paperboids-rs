@@ -76,10 +76,10 @@ impl Plane {
         }
     }
 
-    fn update(&mut self, dt: f32) {
-        let world_scale = 0.5; // TODO: figure out where to put these constants
-        let max_speed = 20.0 * world_scale;
-        let min_speed = 2.0 * world_scale;
+    fn update(&mut self, dt: f32, world_scale: f32) {
+        // TODO: figure out where to put these constants
+        let max_speed = 25.0 * world_scale;
+        let min_speed = 4.0 * world_scale;
 
         self.vel = self.vel + self.acc * dt;
         let curr_speed = na::norm(&self.vel);
@@ -94,53 +94,9 @@ impl Plane {
     }
 } 
 
-fn flock_center_v(ps: &Vec<Plane>, i: uint, look_radius: f32) -> Vec3<f32> {
-    let mut neighbors = 0u;
-    let perceived_center = ps.iter()
-        .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
-        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { neighbors += 1; a + p.pos });
-    neighbors -= 1; // this is because the bird itself is caught by the filter
-
-    if neighbors == 0 {
-        na::zero()
-    } else {
-        na::normalize(&(((perceived_center - ps[i].pos) / neighbors as f32) - ps[i].pos))
-    }
-}
-
-fn keep_away_v(ps: &Vec<Plane>, i: uint, collide_radius: f32) -> Vec3<f32> {
-    let mut keep_away: Vec3<f32> = na::zero();
-    let mut neighbors  = 0u;
-    for j in range(0, ps.len()) {
-        if i != j {
-            let disp = ps[j].pos - ps[i].pos;
-            let dist = na::norm(&disp);
-            if dist < collide_radius {
-                let disp_norm_weight = disp / (dist * dist);
-                keep_away = keep_away - disp_norm_weight;
-                neighbors += 1;
-            }
-        }
-    }
-    if neighbors > 0 {
-        keep_away = na::normalize(&(keep_away / neighbors as f32));
-    }
-    keep_away
-}
-
-fn match_speed_v(ps: &Vec<Plane>, i: uint, look_radius: f32) -> Vec3<f32> {
-    let mut neighbors = 0u;
-    let perceived_velocity = ps.iter()
-        .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
-        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { neighbors += 1; a + p.vel });
-    neighbors -= 1; // this is because the bird itself is caught in the filter
-
-    if neighbors == 0 {
-        na::zero()
-    } else {
-        na::normalize(&(perceived_velocity / neighbors as f32))
-    }
-}
+//    let perceived_center = ps.iter()
+//        .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
+//        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { neighbors += 1; a + p.pos });
 
 fn bounds_v(p: &Plane) -> Vec3<f32> {
     let mut bounds: Vec3<f32> = na::zero();
@@ -217,9 +173,9 @@ fn main() {
     let debug = false;
     let follow_first_bird = false;
     let world_dim = Vec3::new(100.0f32, 100.0, 100.0);
-    let world_scale = 0.5;
-    let look_radius = 20.0 * world_scale;
-    let collide_radius = 10.0 * world_scale; // TODO: figure out a good collide radius
+    let world_scale = 0.2;
+    let look_radius = 30.0 * world_scale;
+    let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
 
     let look_radius2 = look_radius * look_radius; // can avoid squareroot for dist calculations
     let collide_radius2 = collide_radius * collide_radius;
@@ -229,11 +185,11 @@ fn main() {
     let mut arc_ball = ArcBall::new(eye, at);
 
     let weights: [f32, ..5] = [
-        0.0,  // flock centering
+        20.0, // avoid obstacles
         12.0, // collision avoidance
+        8.0,  // flock centering
         8.0,  // match velocity
-        20.0, // bounds push
-        20.0, // avoid sphere
+        10.0, // bounds push
     ];
 
     let num_planes = 500;
@@ -244,7 +200,7 @@ fn main() {
     ground.set_color(0.1, 0.1, 0.1);
 
     // TODO: obstacle meshes
-    let sph_radius = 2.0;
+    let sph_radius = 2.0 * world_scale;
     let mut sph1 = window.add_sphere(sph_radius);
     let sph1_pos = Vec3::new(0.0, 15.0, 0.0);
     sph1.set_local_translation(sph1_pos);
@@ -261,16 +217,18 @@ fn main() {
     sph2.set_lines_width(1.0);
     sph2.set_surface_rendering_activation(false);
 
-    let mut cyl1 = window.add_cylinder(2.0, 40.0);
-    let cyl1_pos = Vec3::new(-20.0, 20.0, -20.0);
+    let cyl_radius = 2.0 * world_scale;
+    let cyl_height = 40.0;
+    let mut cyl1 = window.add_cylinder(cyl_radius, cyl_height);
+    let cyl1_pos = Vec3::new(-20.0, cyl_height / 2.0, -20.0);
     cyl1.set_local_translation(cyl1_pos);
     cyl1.set_color(1.0, 0.0, 0.0);
     cyl1.set_points_size(1.0); //wireframe mode for plane
     cyl1.set_lines_width(1.0);
     cyl1.set_surface_rendering_activation(false);
 
-    let mut cyl2 = window.add_cylinder(2.0, 40.0);
-    let cyl2_pos = Vec3::new(-20.0, 20.0, 45.0);
+    let mut cyl2 = window.add_cylinder(cyl_radius, cyl_height);
+    let cyl2_pos = Vec3::new(-20.0, cyl_height / 2.0, 45.0);
     cyl2.set_local_translation(cyl2_pos);
     cyl2.set_color(1.0, 0.0, 0.0);
     cyl2.set_points_size(1.0); //wireframe mode for plane
@@ -299,11 +257,11 @@ fn main() {
             let mut colliders = 0u;
 
             // rules - overloaded vecter for rules to accumulate and average:
-            // 0. center
+            // 4. avoid obstacles
             // 1. keep away
+            // 0. center
             // 2. follow
             // 3. bounds
-            // 4. avoid obstacles
             let mut rules: [Vec3<f32>, ..5] = [na::zero(), na::zero(), na::zero(), na::zero(), na::zero()];
 
             {
@@ -320,13 +278,13 @@ fn main() {
                     if dist2 < look_radius2 {
                         neighbors += 1;
 
-                        // rule 0 - fly to center
-                        rules[0] = rules[0] + o.pos;
+                        // fly to center
+                        rules[2] = rules[2] + o.pos;
 
-                        // rule 2 - fly in the same direction
-                        rules[2] = rules[2] + o.vel;
+                        // fly in the same direction
+                        rules[3] = rules[3] + o.vel;
 
-                        // rule 1 - avoid others
+                        // avoid others
                         if dist2 < collide_radius2 {
                             colliders += 1;
                             rules[1] = rules[1] - (disp / dist2);
@@ -335,22 +293,22 @@ fn main() {
                 }
 
                 if neighbors > 0 {
-                    rules[0] = na::normalize(&(rules[0] / neighbors as f32 - p.pos)) * weights[0];
-                    rules[2] = na::normalize(&(rules[2] / neighbors as f32)) * weights[2];
+                    rules[2] = na::normalize(&(rules[2] / neighbors as f32 - p.pos)) * weights[2];
+                    rules[3] = na::normalize(&(rules[3] / neighbors as f32)) * weights[3];
                 }
                 if colliders > 0 {
                     rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
                 }
 
-                rules[3] = bounds_v(p) * weights[3];
+                rules[4] = bounds_v(p) * weights[4];
 
-                rules[4] =
+                rules[0] =
                     avoid_spheres_v(p, collide_radius2, &sph1_pos, sph_radius) +
                     avoid_spheres_v(p, collide_radius2, &sph2_pos, sph_radius) +
-                    avoid_cylinder_v(p, collide_radius2, &cyl1_pos, 40.0, 2.0) +
-                    avoid_cylinder_v(p, collide_radius2, &cyl2_pos, 40.0, 2.0);
-                if rules[4] != na::zero() {
-                    rules[4] = na::normalize(&rules[4]) * weights[4];
+                    avoid_cylinder_v(p, collide_radius2, &cyl1_pos, cyl_height, cyl_radius) +
+                    avoid_cylinder_v(p, collide_radius2, &cyl2_pos, cyl_height, cyl_radius);
+                if rules[0] != na::zero() {
+                    rules[0] = na::normalize(&rules[0]) * weights[0];
                 }
 
                 if debug {
@@ -363,60 +321,28 @@ fn main() {
             }
 
             let mut mag = 0.0; // magnitude
-            let max_mag2 = 100.0 * 100.0f32;
+            let max_mag = 100.0;
 
             ps.get_mut(i).acc = na::zero();
 
             for r in range(0, 5) {
-                let m = na::sqnorm(&rules[r]);
+                // TODO: minor optimization? use non-sqrt norm
+                let m = na::norm(&rules[r]);
 
-                // if mag + m > max_mag2 {
-                //     break;
-                // }
+                if mag + m > max_mag {
+                    // rebalance last rule
+                    rules[r] = rules[r] * ((max_mag - mag) / m);
+                }
 
                 mag += m;
                 ps.get_mut(i).acc = ps.get_mut(i).acc + rules[r];
             }
-            //rules[0] + rules[1] + rules[2] + rules[3] + rules[4];
-
-
-//            t_tmp = window.context().get_time();
-//            let r1_scaled = flock_center_v(&ps, i, look_radius) * weights[0];
-//            times[0] += window.context().get_time() - t_tmp;
-//
-//            t_tmp = window.context().get_time();
-//            let r2_scaled = keep_away_v(&ps, i, collide_radius) * weights[1];
-//            times[1] += window.context().get_time() - t_tmp;
-//
-//            t_tmp = window.context().get_time();
-//            let r3_scaled = match_speed_v(&ps, i, look_radius) * weights[2];
-//            times[2] += window.context().get_time() - t_tmp;
-//
-//            t_tmp = window.context().get_time();
-//            let r4_scaled = bounds_v(&ps[i]) * weights[3];
-//            times[3] += window.context().get_time() - t_tmp;
-//
-//            t_tmp = window.context().get_time();
-//            let mut r5_scaled = avoid_spheres_v(&ps, i, collide_radius, &sph1_pos, sph_radius) * weights[4];
-//            r5_scaled = r5_scaled + avoid_spheres_v(&ps, i, collide_radius, &sph2_pos, sph_radius) * weights[4];
-//            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl1_pos, 40.0, 2.0) * weights[4];
-//            r5_scaled = r5_scaled + avoid_cylinder_v(&ps, i, collide_radius, &cyl2_pos, 40.0, 2.0) * weights[4];
-//            times[4] += window.context().get_time() - t_tmp;
-//
-//            if debug {
-//                window.draw_line(&ps[i].pos, &(ps[i].pos + r1_scaled), &Vec3::new(1.0, 0.0, 0.0));
-//                window.draw_line(&ps[i].pos, &(ps[i].pos + r2_scaled), &Vec3::new(0.0, 1.0, 0.0));
-//                window.draw_line(&ps[i].pos, &(ps[i].pos + r3_scaled), &Vec3::new(0.0, 1.0, 1.0));
-//                window.draw_line(&ps[i].pos, &(ps[i].pos + r4_scaled), &Vec3::new(1.0, 1.0, 0.0));
-//            }
-//
-//            ps.get_mut(i).acc = r1_scaled + r2_scaled + r3_scaled + r4_scaled + r5_scaled;
         }
 
         t_tmp = window.context().get_time();
         let dt  = (curr_time - last_time) as f32;
         for p in ps.mut_iter() {
-            p.update(dt);
+            p.update(dt, world_scale);
         }
         times[5] = window.context().get_time() - t_tmp;
 
