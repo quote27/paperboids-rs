@@ -56,9 +56,7 @@ impl Plane {
         let mut node = sn;
         node.set_color(1.0, 1.0, 1.0);
         node.enable_backface_culling(false);
-        node.set_points_size(1.0); //wireframe mode for plane
-        node.set_lines_width(1.0);
-        node.set_surface_rendering_activation(false);
+        enable_wireframe(&mut node);
 
         let x = 25.0 - rand::random::<f32>() * 50.0;
         let y = 25.0 - rand::random::<f32>() * 20.0;
@@ -131,7 +129,7 @@ fn bounds_v(p: &Plane) -> Vec3<f32> {
     if bounds != na::zero() {
         na::normalize(&bounds)
     } else {
-        bounds
+        bounds // a zero vector
     }
 }
 
@@ -174,7 +172,7 @@ fn main() {
     let follow_first_bird = false;
     let world_dim = Vec3::new(100.0f32, 100.0, 100.0);
     let world_scale = 0.5;
-    let look_radius = 30.0 * world_scale;
+    let look_radius = 20.0 * world_scale;
     let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
 
     let look_radius2 = look_radius * look_radius; // can avoid squareroot for dist calculations
@@ -200,41 +198,20 @@ fn main() {
     ground.set_color(0.1, 0.1, 0.1);
 
     // TODO: obstacle meshes
-    let sph_radius = 2.0 * world_scale;
-    let mut sph1 = window.add_sphere(sph_radius);
-    let sph1_pos = Vec3::new(0.0, 15.0, 0.0);
-    sph1.set_local_translation(sph1_pos);
-    sph1.set_color(1.0, 0.0, 0.0);
-    sph1.set_points_size(1.0); //wireframe mode for plane
-    sph1.set_lines_width(1.0);
-    sph1.set_surface_rendering_activation(false);
-
-    let mut sph2 = window.add_sphere(sph_radius);
-    let sph2_pos = Vec3::new(30.0, 10.0, 0.0);
-    sph2.set_local_translation(sph2_pos);
-    sph2.set_color(1.0, 0.0, 0.0);
-    sph2.set_points_size(1.0); //wireframe mode for plane
-    sph2.set_lines_width(1.0);
-    sph2.set_surface_rendering_activation(false);
-
-    let cyl_radius = 2.0 * world_scale;
-    let cyl_height = 40.0;
-    let mut cyl1 = window.add_cylinder(cyl_radius, cyl_height);
-    let cyl1_pos = Vec3::new(-20.0, cyl_height / 2.0, -20.0);
-    cyl1.set_local_translation(cyl1_pos);
-    cyl1.set_color(1.0, 0.0, 0.0);
-    cyl1.set_points_size(1.0); //wireframe mode for plane
-    cyl1.set_lines_width(1.0);
-    cyl1.set_surface_rendering_activation(false);
-
-    let mut cyl2 = window.add_cylinder(cyl_radius, cyl_height);
-    let cyl2_pos = Vec3::new(-20.0, cyl_height / 2.0, 45.0);
-    cyl2.set_local_translation(cyl2_pos);
-    cyl2.set_color(1.0, 0.0, 0.0);
-    cyl2.set_points_size(1.0); //wireframe mode for plane
-    cyl2.set_lines_width(1.0);
-    cyl2.set_surface_rendering_activation(false);
-
+//    let sph_radius = 2.0 * world_scale;
+//    let mut sph1 = window.add_sphere(sph_radius);
+//    let sph1_pos = Vec3::new(0.0, 15.0, 0.0);
+//    sph1.set_local_translation(sph1_pos);
+//    sph1.set_color(1.0, 0.0, 0.0);
+//    enable_wireframe(&mut sph1);
+//
+//    let cyl_radius = 2.0 * world_scale;
+//    let cyl_height = 40.0;
+//    let mut cyl1 = window.add_cylinder(cyl_radius, cyl_height);
+//    let cyl1_pos = Vec3::new(-20.0, cyl_height / 2.0, -20.0);
+//    cyl1.set_local_translation(cyl1_pos);
+//    cyl1.set_color(1.0, 0.0, 0.0);
+//    enable_wireframe(&mut cyl1);
 
     let pmesh = Plane::gen_mesh();
     let mut ps = Vec::new();
@@ -253,9 +230,7 @@ fn main() {
         //let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
         times = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         for i in range(0, ps.len()) {
-            let mut neighbors = 0u;
-            let mut colliders = 0u;
-
+            t_tmp = window.context().get_time();
             // rules - overloaded vecter for rules to accumulate and average:
             // 4. avoid obstacles
             // 1. keep away
@@ -263,6 +238,8 @@ fn main() {
             // 2. follow
             // 3. bounds
             let mut rules: [Vec3<f32>, ..5] = [na::zero(), na::zero(), na::zero(), na::zero(), na::zero()];
+            let mut neighbors = 0u;
+            let mut colliders = 0u;
 
             {
                 let p = &ps[i];
@@ -302,14 +279,12 @@ fn main() {
 
                 rules[4] = bounds_v(p) * weights[4];
 
-                rules[0] =
-                    avoid_spheres_v(p, collide_radius2, &sph1_pos, sph_radius) +
-                    avoid_spheres_v(p, collide_radius2, &sph2_pos, sph_radius) +
-                    avoid_cylinder_v(p, collide_radius2, &cyl1_pos, cyl_height, cyl_radius) +
-                    avoid_cylinder_v(p, collide_radius2, &cyl2_pos, cyl_height, cyl_radius);
-                if rules[0] != na::zero() {
-                    rules[0] = na::normalize(&rules[0]) * weights[0];
-                }
+//                rules[0] =
+//                    avoid_spheres_v(p, collide_radius2, &sph1_pos, sph_radius) +
+//                    avoid_cylinder_v(p, collide_radius2, &cyl1_pos, cyl_height, cyl_radius) +
+//                if rules[0] != na::zero() {
+//                    rules[0] = na::normalize(&rules[0]) * weights[0];
+//                }
 
                 if debug {
                     window.draw_line(&p.pos, &(p.pos + rules[0]), &Vec3::new(1.0, 0.0, 0.0));
@@ -319,6 +294,8 @@ fn main() {
                     window.draw_line(&p.pos, &(p.pos + rules[4]), &Vec3::new(1.0, 0.0, 1.0));
                 }
             }
+            times[0] += window.context().get_time() - t_tmp;
+
 
             let mut mag = 0.0; // magnitude
             let max_mag = 50.0;
@@ -341,6 +318,7 @@ fn main() {
                 mag += m;
                 ps.get_mut(i).acc = ps.get_mut(i).acc + rules[r];
             }
+            times[1] += window.context().get_time() - t_tmp;
         }
 
         t_tmp = window.context().get_time();
@@ -348,7 +326,7 @@ fn main() {
         for p in ps.mut_iter() {
             p.update(dt, world_scale);
         }
-        times[5] = window.context().get_time() - t_tmp;
+        times[2] = window.context().get_time() - t_tmp;
 
         if follow_first_bird {
             arc_ball.look_at_z(ps[0].pos, ps[0].pos + ps[0].vel);
@@ -371,4 +349,10 @@ fn draw_axis(w: &mut Window) {
     w.draw_line(&o, &x, &x);
     w.draw_line(&o, &y, &y);
     w.draw_line(&o, &z, &z);
+}
+
+fn enable_wireframe(n: &mut SceneNode) {
+    n.set_points_size(1.0); //wireframe mode for plane
+    n.set_lines_width(1.0);
+    n.set_surface_rendering_activation(false);
 }
