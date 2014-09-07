@@ -58,6 +58,12 @@ impl Plane {
         node.enable_backface_culling(false);
         enable_wireframe(&mut node);
 
+        // let look_radius = 15.0;
+        // let mut cyl = node.add_cylinder(look_radius, 0.1);
+        // cyl.set_local_translation(Vec3::new(0.0, -0.1, 0.0));
+        // cyl.set_color(0.2, 0.2, 0.2);
+        // enable_wireframe(&mut cyl);
+
         let x = 25.0 - rand::random::<f32>() * 50.0;
         let y = 25.0 - rand::random::<f32>() * 20.0;
         let z = 25.0 - rand::random::<f32>() * 50.0;
@@ -172,7 +178,7 @@ fn main() {
     let follow_first_bird = false;
     let world_dim = Vec3::new(100.0f32, 100.0, 100.0);
     let world_scale = 0.5;
-    let look_radius = 20.0 * world_scale;
+    let look_radius = 15.0 * world_scale;
     let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
 
     let look_radius2 = look_radius * look_radius; // can avoid squareroot for dist calculations
@@ -190,7 +196,7 @@ fn main() {
         20.0, // bounds push
     ];
 
-    let num_planes = 500;
+    let num_planes = 500u;
 
     // TODO: make ground cooler - random heightmap?
     let mut ground = window.add_quad(world_dim.x, world_dim.z, 1, 1);
@@ -214,8 +220,8 @@ fn main() {
 //    enable_wireframe(&mut cyl1);
 
     let pmesh = Plane::gen_mesh();
-    let mut ps = Vec::new();
-    for i in range(0i, num_planes) {
+    let mut ps = Vec::with_capacity(num_planes);
+    for _ in range(0, num_planes) {
         ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(world_scale, world_scale, world_scale))));
     }
 
