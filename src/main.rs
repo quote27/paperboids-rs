@@ -6,6 +6,7 @@ extern crate debug; //to print out type of variable at runtime
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::rand;
+use std::sync::{Arc, Barrier, Future, RWLock};
 use nalgebra::na::{Vec2, Vec3};
 use nalgebra::na;
 use kiss3d::window::Window;
@@ -25,12 +26,11 @@ fn start(argc: int, argv: *const *const u8) -> int {
 
 // TODO: opt; instead of filtering at every rule, do one filter pass and call each of the rules
 
+#[deriving(Send,Sync)]
 struct Plane {
     pos: Vec3<f32>,
     vel: Vec3<f32>,
     acc: Vec3<f32>,
-
-    node: SceneNode,
 }
 
 impl Plane {
@@ -52,18 +52,7 @@ impl Plane {
         Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
     }
 
-    fn new(sn: SceneNode) -> Plane {
-        let mut node = sn;
-        node.set_color(1.0, 1.0, 1.0);
-        node.enable_backface_culling(false);
-        enable_wireframe(&mut node);
-
-        // let look_radius = 15.0;
-        // let mut cyl = node.add_cylinder(look_radius, 0.1);
-        // cyl.set_local_translation(Vec3::new(0.0, -0.1, 0.0));
-        // cyl.set_color(0.2, 0.2, 0.2);
-        // enable_wireframe(&mut cyl);
-
+    fn new() -> Plane {
         let x = 25.0 - rand::random::<f32>() * 50.0;
         let y = 25.0 - rand::random::<f32>() * 20.0;
         let z = 25.0 - rand::random::<f32>() * 50.0;
@@ -76,7 +65,6 @@ impl Plane {
             pos: Vec3::new(x, y, z),
             vel: Vec3::new(vx, vy, vz),
             acc: na::zero(),
-            node: node,
         }
     }
 
@@ -94,7 +82,11 @@ impl Plane {
         }
 
         self.pos = self.pos + self.vel * dt;
-        self.node.look_at_z(&self.pos, &(self.pos + self.vel), &Vec3::y()); // TODO: figure out up vector for banking
+    }
+
+    fn update_node(&mut self, node: &mut SceneNode) {
+        // TODO: figure out up vector for banking
+        node.look_at_z(&self.pos, &(self.pos + self.vel), &Vec3::y()); 
     }
 } 
 
@@ -196,7 +188,7 @@ fn main() {
         20.0, // bounds push
     ];
 
-    let num_planes = 500u;
+    let num_planes = 1000u;
 
     // TODO: make ground cooler - random heightmap?
     let mut ground = window.add_quad(world_dim.x, world_dim.z, 1, 1);
@@ -221,17 +213,195 @@ fn main() {
 
     let pmesh = Plane::gen_mesh();
     let mut ps = Vec::with_capacity(num_planes);
+    let mut pnodes = Vec::with_capacity(num_planes);
     for _ in range(0, num_planes) {
-        ps.push(Plane::new(window.add_mesh(pmesh.clone(), Vec3::new(world_scale, world_scale, world_scale))));
+        ps.push(Plane::new());
+
+        let mut node = window.add_mesh(pmesh.clone(), Vec3::new(world_scale, world_scale, world_scale));
+        node.set_color(1.0, 1.0, 1.0);
+        node.enable_backface_culling(false);
+        enable_wireframe(&mut node);
+        pnodes.push(node);
+
+        // let mut cyl = node.add_cylinder(look_radius, 0.1);
+        // cyl.set_local_translation(Vec3::new(0.0, -0.1, 0.0));
+        // cyl.set_color(0.2, 0.2, 0.2);
+        // enable_wireframe(&mut cyl);
     }
+
+
+
+    let shared_ps = Arc::new(RWLock::new(ps));
+
+    let threads = 4u;
+    let work_size = num_planes / threads;
 
     let mut last_time = window.context().get_time();
     let mut curr_time;
-    let mut times: [f64, ..6];
-    let mut t_tmp;
+    //let mut times: [f64, ..6];
+    //let mut t_tmp;
+
+    //let barrier = Arc::new(Barrier::new(threads + 1));
+
+    let mut frame_count = 0u;
+    let mut frame_accum = 0.0;
+
     while window.render_with_camera(&mut arc_ball) {
         let f_start = window.context().get_time();
         curr_time = window.context().get_time();
+        //t_tmp = window.context().get_time();
+
+        let (tx, rx) = channel();
+
+        for tid in range(0, threads) {
+            //let b = barrier.clone();
+            let child_ps = shared_ps.clone();
+            let tx = tx.clone();
+
+            spawn(proc() {
+                //println!("hi i'm {}", tid);
+                let lock_ps = child_ps.read();
+                let ps = lock_ps.as_slice();
+
+                let start_id = tid * work_size;
+                let work_size =
+                    if tid == threads - 1 {
+                        work_size + num_planes % threads
+                    } else {
+                        work_size
+                    };
+
+                let mut acc_list = Vec::with_capacity(work_size);
+
+                //println!("{}: start: {}, size: {}", tid, start_id, work_size);
+
+                for i in range(start_id, start_id + work_size) {
+                    let mut rules: [Vec3<f32>, ..5] = [na::zero(), na::zero(), na::zero(), na::zero(), na::zero()];
+                    let mut neighbors = 0u;
+                    let mut colliders = 0u;
+
+                    {
+                        let p = &ps[i];
+
+                        for j in range(0, num_planes) {
+                            if i == j { continue; }
+
+                            let o = &ps[j];
+
+                            let disp = o.pos - p.pos;
+                            let dist2 = na::sqnorm(&disp);
+
+                            if dist2 < look_radius2 {
+                                neighbors += 1;
+
+                                // fly to center
+                                rules[2] = rules[2] + o.pos;
+
+                                // fly in the same direction
+                                rules[3] = rules[3] + o.vel;
+
+                                // avoid others
+                                if dist2 < collide_radius2 {
+                                    colliders += 1;
+                                    rules[1] = rules[1] - (disp / dist2);
+                                }
+                            }
+                        }
+
+                        if neighbors > 0 {
+                            rules[2] = na::normalize(&(rules[2] / neighbors as f32 - p.pos)) * weights[2];
+                            rules[3] = na::normalize(&(rules[3] / neighbors as f32)) * weights[3];
+                        }
+                        if colliders > 0 {
+                            rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
+                        }
+
+                        rules[4] = bounds_v(p) * weights[4];
+
+                        //rules[0] =
+                        //    avoid_spheres_v(p, collide_radius2, &sph1_pos, sph_radius) +
+                        //    avoid_cylinder_v(p, collide_radius2, &cyl1_pos, cyl_height, cyl_radius);
+                        //if rules[0] != na::zero() {
+                        //    rules[0] = na::normalize(&rules[0]) * weights[0];
+                        //}
+
+                        // TODO: figure out debug when in thread mode
+                        //if debug {
+                        //    window.draw_line(&p.pos, &(p.pos + rules[0]), &Vec3::new(1.0, 0.0, 0.0));
+                        //    window.draw_line(&p.pos, &(p.pos + rules[1]), &Vec3::new(0.0, 1.0, 0.0));
+                        //    window.draw_line(&p.pos, &(p.pos + rules[2]), &Vec3::new(0.0, 1.0, 1.0));
+                        //    window.draw_line(&p.pos, &(p.pos + rules[3]), &Vec3::new(1.0, 1.0, 0.0));
+                        //    window.draw_line(&p.pos, &(p.pos + rules[4]), &Vec3::new(1.0, 0.0, 1.0));
+                        //}
+                    }
+
+                    let mut mag = 0.0; // magnitude
+                    let max_mag = 50.0;
+
+                    let mut acc: Vec3<f32> = na::zero();
+
+                    for r in range(0, 5) {
+                        // TODO: minor optimization? use non-sqrt norm
+                        let m = na::norm(&rules[r]);
+
+                        if m == 0.0 { continue; }
+
+                        if mag + m > max_mag {
+                            // rebalance last rule
+                            rules[r] = rules[r] * ((max_mag - mag) / m);
+                            acc = acc + rules[r];
+                            break;
+                        }
+
+                        mag += m;
+                        acc = acc + rules[r];
+                    }
+
+                    acc_list.push(acc);
+                    //unsafe {
+                    //    ps.get_mut(i).unwrap().acc = acc;
+                    //}
+                }
+
+                //b.wait();
+                tx.send((tid, acc_list));
+            });
+        }
+        //barrier.wait();
+
+        let dt  = (curr_time - last_time) as f32;
+
+        for _ in range(0, threads) {
+            let (tid, acc_list) = rx.recv();
+            let start_id = tid * work_size;
+
+            for i in range(start_id, start_id + acc_list.len()) {
+                let mut ps = shared_ps.write();
+                {
+                    let p = ps.get_mut(i);
+                    p.acc = acc_list[i - start_id];
+                    p.update(dt, world_scale);
+                    p.update_node(pnodes.get_mut(i));
+
+                }
+            }
+        }
+        if debug {
+            let mut ps = shared_ps.read();
+            for i in range(0, num_planes) {
+                let p = (*ps)[i];
+                println!("{}: pos: {}, vel: {}", i, p.pos, p.vel);
+                if p.pos == na::zero() {
+                    println!("zero position vector: id: {}", i);
+                }
+                if !p.pos.x.is_finite() || !p.pos.y.is_finite() || !p.pos.z.is_finite() {
+                    println!("non finite position vector: id: {}, vec: {}", i, (p.pos.x, p.pos.y, p.pos.z));
+                }
+            }
+        }
+
+        /*
+
 
         //let flock_total_pos = ps.iter().fold(na::zero::<Vec3<f32>>(), |a, ref p| a + p.pos);
         times = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
@@ -329,19 +499,29 @@ fn main() {
 
         t_tmp = window.context().get_time();
         let dt  = (curr_time - last_time) as f32;
-        for p in ps.mut_iter() {
-            p.update(dt, world_scale);
+        for i in range(0, num_planes) {
+            ps.get_mut(i).update(dt, world_scale);
+            ps.get_mut(i).update_node(pnodes.get_mut(i));
         }
         times[2] = window.context().get_time() - t_tmp;
 
         if follow_first_bird {
             arc_ball.look_at_z(ps[0].pos, ps[0].pos + ps[0].vel);
         }
+*/
 
         draw_axis(&mut window);
 
         let f_end = window.context().get_time();
-        println!("frame: {}, sub: {} {} {} {} {}, update: {}", f_end - f_start, times[0], times[1], times[2], times[3], times[4], times[5]);
+        //println!("frame: {}, sub: {} {} {} {} {}, update: {}", f_end - f_start, times[0], times[1], times[2], times[3], times[4], times[5]);
+        frame_accum += f_end - f_start;
+        frame_count += 1;
+        if frame_count % 60 == 0 {
+            frame_accum /= frame_count as f64;
+            println!("avg last 60 frames: {}", frame_accum);
+            frame_accum = 0.0;
+            frame_count = 0;
+        }
         last_time = curr_time;
     }
 }
