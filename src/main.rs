@@ -27,7 +27,7 @@ fn start(argc: int, argv: *const *const u8) -> int {
 
 // TODO: opt; instead of filtering at every rule, do one filter pass and call each of the rules
 
-#[deriving(Send,Sync)]
+#[deriving(Send,Sync,Show)]
 struct Plane {
     pos: Vec3<f32>,
     vel: Vec3<f32>,
@@ -53,10 +53,10 @@ impl Plane {
         Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
     }
 
-    fn new() -> Plane {
-        let x = 25.0 - rand::random::<f32>() * 50.0;
-        let y = 25.0 - rand::random::<f32>() * 20.0;
-        let z = 25.0 - rand::random::<f32>() * 50.0;
+    fn new(bbox: &AABB) -> Plane {
+        let x = bbox.l.x + rand::random::<f32>() * bbox.xlen();
+        let y = bbox.l.y + rand::random::<f32>() * bbox.ylen();
+        let z = bbox.l.z + rand::random::<f32>() * bbox.zlen();
 
         let vx = 10.0 - rand::random::<f32>() * 20.0;
         let vy = 10.0 - rand::random::<f32>() * 20.0;
@@ -95,31 +95,31 @@ impl Plane {
 //        .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
 //        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { neighbors += 1; a + p.pos });
 
-fn bounds_v(p: &Plane) -> Vec3<f32> {
+fn bounds_v(p: &Plane, bbox: &AABB) -> Vec3<f32> {
     let mut bounds: Vec3<f32> = na::zero();
 
     bounds.x =
-        if p.pos.x > 50.0 {
+        if p.pos.x > bbox.h.x {
             -1.0
-        } else if p.pos.x < -50.0 {
+        } else if p.pos.x < bbox.l.x {
             1.0
         } else {
             0.0
         };
 
     bounds.y =
-        if p.pos.y > 40.0 {
+        if p.pos.y > bbox.h.y {
             -1.0
-        } else if p.pos.y < 5.0 {
+        } else if p.pos.y < bbox.l.y {
             1.0
         } else {
             0.0
         };
 
     bounds.z =
-        if p.pos.z > 50.0 {
+        if p.pos.z > bbox.h.z {
             -1.0
-        } else if p.pos.z < -50.0 {
+        } else if p.pos.z < bbox.l.z {
             1.0
         } else {
             0.0
@@ -169,7 +169,7 @@ fn main() {
 
     let debug = false;
     let follow_first_bird = false;
-    let world_dim = Vec3::new(100.0f32, 100.0, 100.0);
+    let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 40.0, 100.0));
     let world_scale = 0.2;
     let look_radius = 15.0 * world_scale;
     let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
@@ -178,8 +178,8 @@ fn main() {
     let collide_radius2 = collide_radius * collide_radius;
 
     // camera setup
-    let eye = Vec3::new(world_dim.x/2.0, world_dim.y/2.0, world_dim.z);
-    let at = na::one();
+    let eye = Vec3::new(0.0, world_box.h.y / 2.0, -world_box.h.z / 2.0);
+    let at = Vec3::new(world_box.h.x / 2.0, 0.0, world_box.h.z / 2.0);
     let mut arc_ball = ArcBall::new(eye, at);
 
     let weights: [f32, ..5] = [
@@ -193,8 +193,9 @@ fn main() {
     let num_planes = 5000u;
 
     // TODO: make ground cooler - random heightmap?
-    let mut ground = window.add_quad(world_dim.x, world_dim.z, 1, 1);
+    let mut ground = window.add_quad(world_box.xlen(), world_box.zlen(), 1, 1);
     ground.set_local_rotation(Vec3::new(std::num::Float::frac_pi_2(), 0.0, 0.0));
+    ground.set_local_translation(Vec3::new(world_box.xlen() / 2.0, 0.0, world_box.zlen() / 2.0));
     ground.set_color(0.1, 0.1, 0.1);
 
     // TODO: obstacle meshes
@@ -213,11 +214,16 @@ fn main() {
 //    cyl1.set_color(1.0, 0.0, 0.0);
 //    enable_wireframe(&mut cyl1);
 
+    // shrink the world bouonding box to prevent birds from spawning / moving outside the world
+    let mut fly_bbox = world_box.clone();
+    fly_bbox.scale_center(0.8);
+    let fly_bbox = fly_bbox;
+
     let pmesh = Plane::gen_mesh();
     let mut ps = Vec::with_capacity(num_planes);
     let mut pnodes = Vec::with_capacity(num_planes);
     for _ in range(0, num_planes) {
-        ps.push(Plane::new());
+        ps.push(Plane::new(&fly_bbox));
 
         let mut node = window.add_mesh(pmesh.clone(), Vec3::new(world_scale, world_scale, world_scale));
         node.set_color(1.0, 1.0, 1.0);
@@ -263,7 +269,6 @@ fn main() {
             spawn(proc() {
                 let mut thread_t = Timer::new();
                 thread_t.start();
-                //println!("hi i'm {}", tid);
                 let lock_ps = child_ps.read();
                 let ps = lock_ps.as_slice();
 
@@ -276,8 +281,6 @@ fn main() {
                     };
 
                 let mut acc_list = Vec::with_capacity(work_size);
-
-                //println!("{}: start: {}, size: {}", tid, start_id, work_size);
 
                 for i in range(start_id, start_id + work_size) {
                     let mut rules: [Vec3<f32>, ..5] = [na::zero(), na::zero(), na::zero(), na::zero(), na::zero()];
@@ -320,7 +323,7 @@ fn main() {
                             rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
                         }
 
-                        rules[4] = bounds_v(p) * weights[4];
+                        rules[4] = bounds_v(p, &fly_bbox) * weights[4];
 
                         //rules[0] =
                         //    avoid_spheres_v(p, collide_radius2, &sph1_pos, sph_radius) +
@@ -448,6 +451,13 @@ fn main() {
         }
         last_time = curr_time;
     }
+
+    // {
+    //     let ps = shared_ps.read();
+    //     for p in ps.iter() {
+    //         println!("{}", p);
+    //     }
+    // }
 }
 
 fn draw_axis(w: &mut Window) {
@@ -487,5 +497,49 @@ impl Timer {
     #[inline(always)]
     fn elapsedms(&self) -> f64 {
         (self.e - self.s) as f64 / 1e6 //nanoseconds -> ms
+    }
+}
+
+#[deriving(Clone)]
+struct AABB { l: Vec3<f32>, h: Vec3<f32> }
+impl AABB {
+    fn new(low: Vec3<f32>, high: Vec3<f32>) -> AABB {
+        AABB { l: low, h: high, }
+    }
+
+    #[inline(always)]
+    fn xlen(&self) -> f32 { self.h.x - self.l.x }
+
+    #[inline(always)]
+    fn ylen(&self) -> f32 { self.h.y - self.l.y }
+
+    #[inline(always)]
+    fn zlen(&self) -> f32 { self.h.z - self.l.z }
+
+    fn center(&self) -> Vec3<f32> {
+        self.l + (self.h - self.l) / 2.0f32
+    }
+
+    // scales but pins to lower corner
+    fn scale(&mut self, scale: f32) {
+        self.h.x = self.l.x + self.xlen() * scale;
+        self.h.y = self.l.y + self.ylen() * scale;
+        self.h.z = self.l.z + self.zlen() * scale;
+    }
+
+    fn scale_center(&mut self, scale: f32) {
+        let xl = self.xlen();
+        let yl = self.ylen();
+        let zl = self.zlen();
+
+        let diffv = Vec3::new(xl - xl * scale, yl - yl * scale, zl - zl * scale) * 0.5f32;
+
+        self.scale(scale);
+        self.trans(&diffv);
+    }
+
+    fn trans(&mut self, trans: &Vec3<f32>) {
+        self.h = self.h + *trans;
+        self.l = self.l + *trans;
     }
 }
