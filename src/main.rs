@@ -169,6 +169,7 @@ fn main() {
 
     let debug = false;
     let follow_first_bird = false;
+    let show_z_order = false;
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 40.0, 100.0));
     let world_scale = 0.2;
     let look_radius = 15.0 * world_scale;
@@ -178,7 +179,7 @@ fn main() {
     let collide_radius2 = collide_radius * collide_radius;
 
     // camera setup
-    let eye = Vec3::new(0.0, world_box.h.y / 2.0, -world_box.h.z / 2.0);
+    let eye = Vec3::new(0.0, world_box.h.y / 2.0, -world_box.h.z);
     let at = Vec3::new(world_box.h.x / 2.0, 0.0, world_box.h.z / 2.0);
     let mut arc_ball = ArcBall::new(eye, at);
 
@@ -248,7 +249,7 @@ fn main() {
     let mut curr_time;
 
     let mut frame_count = 0u;
-    let mut frame_times: [f64, ..6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; // spot 0 is total
+    let mut frame_times: [f64, ..7] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; // spot 0 is total
     let mut thread_times: Vec<f64> = Vec::with_capacity(threads);
     for i in range(0, threads) {
         thread_times.push(0.0);
@@ -258,6 +259,28 @@ fn main() {
         let mut frame_t = Timer::new();
         frame_t.start();
         curr_time = time::precise_time_ns();
+
+        let mut sorted; // (plane id, morton value)
+        {
+            let lock = shared_ps.read();
+            let ps = &*lock;
+            sorted = z_order_planes(&*lock);
+
+            if show_z_order {
+                for i in range(0, sorted.len()-1) {
+                    let (id1, _) = sorted[i];
+                    let (id2, _) = sorted[i+1];
+                    let p1 = ps[id1];
+                    let p2 = ps[id2];
+
+                    window.draw_line(&p1.pos, &p2.pos, &Vec3::new(0.0, 1.0, 1.0));
+                }
+            }
+        }
+        let sorted = sorted;
+        frame_times[6] += frame_t.stop();
+
+        //println!("sort: {}", frame_t.stop());
 
         let (tx, rx) = channel();
 
@@ -397,7 +420,6 @@ fn main() {
                     p.update(dt, world_scale);
                     p.update_node(pnodes.get_mut(i));
                     frame_times[5] += update_birds_inner2_t.stop();
-
                 }
             }
             frame_times[4] += update_birds_inner_t.stop();
@@ -431,13 +453,13 @@ fn main() {
         //println!("frame: {}, sub: {} {} {} {} {}, update: {}", f_end - f_start, times[0], times[1], times[2], times[3], times[4], times[5]);
         frame_count += 1;
         if frame_count % 60 == 0 {
-            for i in range(0, 6) {
+            for i in range(0, 7) {
                 frame_times[i] /= frame_count as f64;
             }
             for t in thread_times.mut_iter() {
                 *t = *t / frame_count as f64;
             }
-            println!("avg last 60 frames: {:.2} - steps: {:.2} {:.2} - breakdown: {:.2} {:.2} {:.2}", frame_times[0], frame_times[1], frame_times[2], frame_times[3], frame_times[4], frame_times[5]);
+            println!("avg last 60 frames: {:.2} - steps: {:.2} {:.2} - breakdown: {:.2} {:.2} {:.2} {:.2}", frame_times[0], frame_times[1], frame_times[2], frame_times[3], frame_times[4], frame_times[5], frame_times[6]);
             print!("threads: ");
             for t in thread_times.mut_iter() {
                 print!("{} ", *t);
@@ -445,7 +467,7 @@ fn main() {
             }
             println!("");
             frame_count = 0;
-            for i in range(0, 6) {
+            for i in range(0, 7) {
                 frame_times[i] = 0.0;
             }
         }
@@ -542,4 +564,48 @@ impl AABB {
         self.h = self.h + *trans;
         self.l = self.l + *trans;
     }
+}
+
+#[inline(always)]
+fn min(a: f32, b: f32) -> f32 {
+    if a < b { a } else { b }
+}
+
+#[inline(always)]
+fn max(a: f32, b: f32) -> f32 {
+    if a > b { a } else { b }
+}
+
+// logic from http://devblogs.nvidia.com/parallelforall/thinking-parallel-part-iii-tree-construction-gpu/
+fn morton_3d(p: &Vec3<f32>) -> u32 {
+    let x = min(max(p.x * 10.0, 0.0), 1023.0f32);
+    let y = min(max(p.y * 10.0, 0.0), 1023.0f32);
+    let z = min(max(p.z * 10.0, 0.0), 1023.0f32);
+
+    let xx = expand_bits(x as u32);
+    let yy = expand_bits(y as u32);
+    let zz = expand_bits(z as u32);
+
+    xx * 4 + yy * 2 + zz
+}
+
+fn expand_bits(u: u32) -> u32 {
+    let mut u = u;
+    u = (u * 0x00010001u32) & 0xFF0000FFu32;
+    u = (u * 0x00000101u32) & 0x0F00F00Fu32;
+    u = (u * 0x00000011u32) & 0xC30C30C3u32;
+    u = (u * 0x00000005u32) & 0x49249249u32;
+    u
+}
+
+fn z_order_planes(ps: &Vec<Plane>) -> Vec<(uint, u32)> {
+    let mut zord_id: Vec<(uint, u32)> = Vec::with_capacity(ps.len());
+
+    for i in range(0, ps.len()) {
+        zord_id.push((i, morton_3d(&ps[i].pos)));
+    }
+
+    zord_id.sort_by(|&(_, am), &(_, bm)| am.cmp(&bm));
+
+    zord_id
 }
