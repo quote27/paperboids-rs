@@ -16,6 +16,10 @@ use kiss3d::resource::Mesh;
 use kiss3d::scene::SceneNode;
 use kiss3d::light;
 
+use utils::{Timer, AABB, min, max};
+
+mod utils;
+
 #[start]
 fn start(argc: int, argv: *const *const u8) -> int {
     native::start(argc, argv, main)
@@ -26,6 +30,8 @@ fn start(argc: int, argv: *const *const u8) -> int {
 // TODO: check out recorder demo to create mpg's of simulations
 
 // TODO: opt; instead of filtering at every rule, do one filter pass and call each of the rules
+
+struct PlaneId(int);
 
 #[deriving(Send,Sync,Show)]
 struct Plane {
@@ -196,10 +202,10 @@ fn main() {
 
     let debug = false;
     let follow_first_bird = false;
-    let show_z_order = false;
+    let show_z_order = true;
     let show_look_radius = false;
 
-    let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 40.0, 100.0));
+    let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
     let world_scale = 0.2;
     let look_radius = 20.0 * world_scale;
@@ -209,8 +215,8 @@ fn main() {
     let collide_radius2 = collide_radius * collide_radius;
 
     // camera setup
-    let eye = Vec3::new(0.0, world_box.h.y / 2.0, -world_box.h.z);
-    let at = Vec3::new(world_box.h.x / 2.0, 0.0, world_box.h.z / 2.0);
+    let eye = Vec3::new(0.0, world_box.h.y, -world_box.h.z);
+    let at = Vec3::new(world_box.h.x / 2.0, world_box.h.y / 2.0, world_box.h.z / 2.0);
     let mut arc_ball = ArcBall::new(eye, at);
 
     let weights: [f32, ..5] = [
@@ -529,83 +535,6 @@ fn enable_wireframe(n: &mut SceneNode) {
     n.set_points_size(1.0); //wireframe mode for plane
     n.set_lines_width(1.0);
     n.set_surface_rendering_activation(false);
-}
-
-struct Timer { s: u64, e: u64, }
-impl Timer {
-    fn new() -> Timer {
-        Timer { s: 0, e: 0 }
-    }
-
-    #[inline(always)]
-    fn start(&mut self) {
-        self.s = time::precise_time_ns();
-    }
-
-    #[inline(always)]
-    fn stop(&mut self) -> f64 {
-        self.e = time::precise_time_ns();
-        self.elapsedms()
-    }
-
-    #[inline(always)]
-    fn elapsedms(&self) -> f64 {
-        (self.e - self.s) as f64 / 1e6 //nanoseconds -> ms
-    }
-}
-
-#[deriving(Clone)]
-struct AABB { l: Vec3<f32>, h: Vec3<f32> }
-impl AABB {
-    fn new(low: Vec3<f32>, high: Vec3<f32>) -> AABB {
-        AABB { l: low, h: high, }
-    }
-
-    #[inline(always)]
-    fn xlen(&self) -> f32 { self.h.x - self.l.x }
-
-    #[inline(always)]
-    fn ylen(&self) -> f32 { self.h.y - self.l.y }
-
-    #[inline(always)]
-    fn zlen(&self) -> f32 { self.h.z - self.l.z }
-
-    fn center(&self) -> Vec3<f32> {
-        self.l + (self.h - self.l) / 2.0f32
-    }
-
-    // scales but pins to lower corner
-    fn scale(&mut self, scale: f32) {
-        self.h.x = self.l.x + self.xlen() * scale;
-        self.h.y = self.l.y + self.ylen() * scale;
-        self.h.z = self.l.z + self.zlen() * scale;
-    }
-
-    fn scale_center(&mut self, scale: f32) {
-        let xl = self.xlen();
-        let yl = self.ylen();
-        let zl = self.zlen();
-
-        let diffv = Vec3::new(xl - xl * scale, yl - yl * scale, zl - zl * scale) * 0.5f32;
-
-        self.scale(scale);
-        self.trans(&diffv);
-    }
-
-    fn trans(&mut self, trans: &Vec3<f32>) {
-        self.h = self.h + *trans;
-        self.l = self.l + *trans;
-    }
-}
-
-#[inline(always)]
-fn min(a: f32, b: f32) -> f32 {
-    if a < b { a } else { b }
-}
-
-#[inline(always)]
-fn max(a: f32, b: f32) -> f32 {
-    if a > b { a } else { b }
 }
 
 // logic from http://devblogs.nvidia.com/parallelforall/thinking-parallel-part-iii-tree-construction-gpu/
