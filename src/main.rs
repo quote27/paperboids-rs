@@ -17,7 +17,9 @@ use kiss3d::scene::SceneNode;
 use kiss3d::light;
 
 use utils::{Timer, AABB, min, max};
+use octree::Octree;
 
+mod octree;
 mod utils;
 
 #[start]
@@ -281,6 +283,8 @@ fn main() {
 
     let shared_ps = Arc::new(RWLock::new(ps));
 
+    let mut octree = Octree::new(world_box);
+
     let threads = 4u;
     let work_size = num_planes / threads;
 
@@ -318,6 +322,12 @@ fn main() {
         }
         let sorted = sorted;
         frame_times[6] += frame_t.stop();
+
+        octree.reset(world_box);
+        {
+            let ps = shared_ps.read();
+            octree.insert(&*ps);
+        }
 
         //println!("sort: {}", frame_t.stop());
 
