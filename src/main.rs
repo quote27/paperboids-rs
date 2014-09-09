@@ -53,6 +53,33 @@ impl Plane {
         Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
     }
 
+    fn gen_octagon() -> Rc<RefCell<Mesh>> {
+        let vertices = vec!(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.71, 0.0, 0.71),
+            Vec3::new(0.0, 0.0, 1.0),
+            Vec3::new(-0.71, 0.0, 0.71),
+            Vec3::new(-1.0, 0.0, 0.0),
+            Vec3::new(-0.71, 0.0, -0.71),
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.71, 0.0, -0.71),
+        );
+
+        let indices = vec!(
+            Vec3::new(0u32, 1, 2),
+            Vec3::new(0u32, 2, 3),
+            Vec3::new(0u32, 3, 4),
+            Vec3::new(0u32, 4, 5),
+            Vec3::new(0u32, 5, 6),
+            Vec3::new(0u32, 6, 7),
+            Vec3::new(0u32, 7, 8),
+            Vec3::new(0u32, 8, 1),
+        );
+
+        Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
+    }
+
     fn new(bbox: &AABB) -> Plane {
         let x = bbox.l.x + rand::random::<f32>() * bbox.xlen();
         let y = bbox.l.y + rand::random::<f32>() * bbox.ylen();
@@ -149,7 +176,7 @@ fn avoid_cylinder_v(p: &Plane, collide_radius2: f32, cyl_pos: &Vec3<f32>, cyl_h:
         let c2d = Vec2::new(cyl_pos.x, cyl_pos.z);
 
         let disp = c2d - p2d;
-        let dist2 = na::sqnorm(&disp) - cyl_r; //subtract radius of sphere
+        let dist2 = na::sqnorm(&disp) - cyl_r * cyl_r; //subtract radius of sphere
         if dist2 < collide_radius2 {
             let v = -disp / dist2;
             Vec3::new(v.x, 0.0, v.y)
@@ -170,9 +197,12 @@ fn main() {
     let debug = false;
     let follow_first_bird = false;
     let show_z_order = false;
+    let show_look_radius = false;
+
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 40.0, 100.0));
+
     let world_scale = 0.2;
-    let look_radius = 15.0 * world_scale;
+    let look_radius = 20.0 * world_scale;
     let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
 
     let look_radius2 = look_radius * look_radius; // can avoid squareroot for dist calculations
@@ -190,6 +220,7 @@ fn main() {
         8.0,  // match velocity
         20.0, // bounds push
     ];
+    let max_mag = 100.0;
 
     let num_planes = 5000u;
 
@@ -221,6 +252,7 @@ fn main() {
     let fly_bbox = fly_bbox;
 
     let pmesh = Plane::gen_mesh();
+    let octmesh = Plane::gen_octagon();
     let mut ps = Vec::with_capacity(num_planes);
     let mut pnodes = Vec::with_capacity(num_planes);
     for _ in range(0, num_planes) {
@@ -230,11 +262,12 @@ fn main() {
         node.set_color(1.0, 1.0, 1.0);
         node.enable_backface_culling(false);
         enable_wireframe(&mut node);
-        if debug { // cylindar to represent look radius
-            let mut cyl = node.add_cylinder(look_radius, 0.1);
-            cyl.set_local_translation(Vec3::new(0.0, -0.1, 0.0));
-            cyl.set_color(0.2, 0.2, 0.2);
-            enable_wireframe(&mut cyl);
+        if show_look_radius { // cylindar to represent look radius
+            let lr = look_radius / world_scale; //undo scale, as parent is scaled
+            let mut oct = node.add_mesh(octmesh.clone(), Vec3::new(lr, lr, lr));
+            oct.set_local_translation(Vec3::new(0.0, -0.1, 0.0));
+            oct.set_color(0.2, 0.2, 0.2);
+            enable_wireframe(&mut oct);
         }
 
         pnodes.push(node);
@@ -366,7 +399,6 @@ fn main() {
                     }
 
                     let mut mag = 0.0; // magnitude
-                    let max_mag = 50.0;
 
                     let mut acc: Vec3<f32> = na::zero();
 
