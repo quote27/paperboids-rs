@@ -760,7 +760,7 @@ fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: OctnodeId
     }
 
     let o = tc.octree.get_node(curr);
-    let dv = tc.p.pos - o.c;
+    let dv = o.c - tc.p.pos;
     let d = na::norm(&dv);
 
    if o.is_leaf() {
