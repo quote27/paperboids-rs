@@ -294,7 +294,8 @@ fn main() {
 
     let shared_ps = Arc::new(RWLock::new(ps));
 
-    let mut octree = Octree::new(world_box);
+    let octree = Octree::new(world_box);
+    let shared_octree = Arc::new(RWLock::new(octree));
 
     let threads = 4u;
     let work_size = num_planes / threads;
@@ -340,8 +341,9 @@ fn main() {
         time_map.update(_zsort, section_t.stop());
 
         // Octree build start
-        octree.reset(world_box);
         {
+            let mut octree = shared_octree.write();
+            octree.reset(world_box);
             let ps = shared_ps.read();
             section_t.start();
             octree.insert(&*ps);
@@ -366,6 +368,7 @@ fn main() {
         for tid in range(0, threads) {
             //let b = barrier.clone();
             let child_ps = shared_ps.clone();
+            let child_octree = shared_octree.clone();
             let tx = tx.clone();
 
             spawn(proc() {
@@ -373,6 +376,8 @@ fn main() {
                 thread_t.start();
                 let lock_ps = child_ps.read();
                 let ps = lock_ps.as_slice();
+
+                let octree = child_octree.read();
 
                 let start_id = tid * work_size;
                 let work_size =
@@ -425,8 +430,8 @@ fn main() {
                         //     rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
                         // }
 
-                        let (r1, r2, r3) = calc_rules(ps, num_planes, i, look_radius2, collide_radius2);
-                        //let (r1, r2, r3) = calc_rules_octree(ps, num_planes, i, &octree, look_radius2, collide_radius2);
+                        //let (r1, r2, r3) = calc_rules(ps, num_planes, i, look_radius2, collide_radius2);
+                        let (r1, r2, r3) = calc_rules_octree(ps, num_planes, i, &*octree, look_radius2, collide_radius2);
                         rules[1] = r1 * weights[1];
                         rules[2] = r2 * weights[2];
                         rules[3] = r3 * weights[3];
@@ -517,7 +522,7 @@ fn main() {
             let ps = shared_ps.read();
             for i in range(0, num_planes) {
                 let p = (*ps)[i];
-                println!("{}: pos: {}, vel: {}", i, p.pos, p.vel);
+                //println!("{}: pos: {}, vel: {}", i, p.pos, p.vel);
                 if p.pos == na::zero() {
                     println!("zero position vector: id: {}", i);
                 }
@@ -551,8 +556,11 @@ fn main() {
                 *t = 0.0;
             }
             println!("");
-            print!("      // octree stats: ");
-            octree.stats();
+            {
+                print!("      // octree stats: ");
+                let octree = shared_octree.read();
+                octree.stats();
+            }
             frame_count = 0;
             frame_avg = 0.0;
             time_map.clear();
@@ -694,10 +702,10 @@ fn calc_rules(ps: &[Plane], num_planes: uint, i: uint, look_radius2: f32, collid
 }
 
 struct TraversalConst<'a, 'b, 'c> {
-    ps: &'a [Plane],
-    num_planes: uint,
+    //ps: &'a [Plane],
+    //num_planes: uint,
     p: &'b Plane,
-    pid: uint,
+    //pid: uint,
     octree: &'c Octree,
     look_radius2: f32,
     collide_radius2: f32,
@@ -715,10 +723,10 @@ struct TraversalRecur {
 fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
     let p = &ps[pid];
     let tc = TraversalConst {
-        ps: ps,
-        num_planes: num_planes,
+        //ps: ps,
+        //num_planes: num_planes,
         p: p,
-        pid: pid,
+        //pid: pid,
         octree: octree,
         look_radius2: look_radius2,
         collide_radius2: collide_radius2,
