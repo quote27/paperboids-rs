@@ -1,7 +1,7 @@
 extern crate nalgebra;
 
-use utils::{Timer, AABB};
-use nalgebra::na::{Vec2, Vec3};
+use utils::AABB;
+use nalgebra::na::Vec3;
 use nalgebra::na;
 
 use super::{Plane, PlaneId};
@@ -17,44 +17,46 @@ enum OctnodeState {
 struct Octnode {
     parent: OctnodeId,
     child: [OctnodeId, ..8],
-    plane_id: PlaneId, //TODO: convert to vector
+    pub plane_id: PlaneId, //TODO: convert to vector
 
-    b: AABB,
-    state: OctnodeState,
+    pub b: AABB,
+    pub state: OctnodeState,
 
     c: Vec3<f32>, // flock center
     v: Vec3<f32>, // flock direction [average, but not normalized]
 }
 
 impl Octnode {
-    fn new(parent: OctnodeId, plane_id: PlaneId, bbox: AABB) -> Octnode {
-        let state = match plane_id {
-            PlaneId(-1) => Empty,
-            _ => Leaf,
-        };
+    fn new(parent: OctnodeId, plane_id: PlaneId, bbox: AABB, ps: &Vec<Plane>) -> Octnode {
+        let PlaneId(pid) = plane_id; //TODO: verify: in theory this fn will not be called without a valid plane
+        let pid = pid as uint;
+
         Octnode {
             parent: parent,
             child: [OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1)],
             plane_id: plane_id,
             b: bbox,
-            state: state,
-            c: na::zero(), //TODO: set these to plane's data
-            v: na::zero(),
+            state: Leaf,
+            c: ps[pid].pos,
+            v: ps[pid].vel,
         }
     }
 
-    fn update(&mut self, pool: &Vec<Octnode>) {
-        // TODO: write this
+    fn empty(bbox: AABB) -> Octnode {
+        Octnode {
+            parent: OctnodeId(-1),
+            child: [OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1)],
+            plane_id: PlaneId(-1),
+            b: bbox,
+            state: Empty,
+            c: na::zero(),
+            v: na::zero(),
+        }
     }
 
     #[inline(always)]
     fn width(&self) -> f32{
         self.b.xlen()
-    }
-
-    #[inline(always)]
-    fn center(&self) -> Vec3<f32> {
-        self.b.center()
     }
 }
 
@@ -62,13 +64,13 @@ impl Octnode {
 
 pub struct Octree {
     root: OctnodeId,
-    pool: Vec<Octnode>,
+    pub pool: Vec<Octnode>,
 }
 
 impl Octree {
     pub fn new(bbox: AABB) -> Octree {
         let mut p = Vec::with_capacity(1 << 8);
-        p.push(Octnode::new(OctnodeId(-1), PlaneId(-1), bbox));
+        p.push(Octnode::empty(bbox));
 
         Octree {
             root: OctnodeId(0),
@@ -76,10 +78,61 @@ impl Octree {
         }
     }
 
+    pub fn update(&mut self, ps: &Vec<Plane>) {
+        let root = self.root;
+        self.update_recur(root, ps);
+    }
+    fn update_recur(&mut self, curr: OctnodeId, ps: &Vec<Plane>) {
+        let OctnodeId(cid) = curr;
+        let cid = cid as uint;
+        let state = self.pool[cid].state;
+
+        match state {
+            Empty => { }
+            Leaf => {
+                // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
+                // let PlaneId(pid) = self.pool[cid].plane_id;
+                // let pid = pid as uint;
+                // let o = self.pool.get_mut(cid);
+                // o.c = ps[pid].pos;
+                // o.v = ps[pid].vel;
+            }
+            Node => {
+                let mut c: Vec3<f32> = na::zero();
+                let mut v: Vec3<f32> = na::zero();
+                let mut active_children = 0u;
+
+                for i in range(0, 8) {
+                    let child_oid = self.pool[cid].child[i];
+                    let OctnodeId(child_id) = child_oid;
+                    if child_id >= 0 {
+                        let child_id = child_id as uint;
+
+                        match self.pool[child_id].state {
+                            Node => self.update_recur(child_oid, ps),
+                            _ => { }
+                        }
+
+                        let o = self.pool[child_id];
+                        c = c + o.c;
+                        v = v + o.v;
+                        active_children += 1;
+                    }
+                }
+                //TODO: verify: if state is node, there has to be at least one child, so can't have a divide by 0
+                c = c / active_children as f32;
+                v = v / active_children as f32;
+                let o = self.pool.get_mut(cid);
+                o.c = c;
+                o.v = v;
+            }
+        }
+    }
+
     pub fn reset(&mut self, bbox: AABB) {
         self.root = OctnodeId(0);
         self.pool.truncate(0); // 'empty' the vector, capacity stays the same
-        self.pool.push(Octnode::new(OctnodeId(-1), PlaneId(-1), bbox));
+        self.pool.push(Octnode::empty(bbox));
     }
 
     pub fn insert(&mut self, ps: &Vec<Plane>) {
@@ -95,7 +148,7 @@ impl Octree {
         //println!("cid: {}", cid);
         if cid == -1 {
             //println!("null node, pulling from pool");
-            self.pool.push(Octnode::new(parent, plane_id, *bbox));
+            self.pool.push(Octnode::new(parent, plane_id, *bbox, ps));
             OctnodeId(self.pool.len() as int - 1)
         } else {
             let cid = cid as uint;
@@ -103,7 +156,7 @@ impl Octree {
             match self.pool[cid].state {
                 Empty => {
                     //println!("empty node");
-                    *self.pool.get_mut(cid) = Octnode::new(parent, plane_id, *bbox);
+                    *self.pool.get_mut(cid) = Octnode::new(parent, plane_id, *bbox, ps);
                     OctnodeId(cid as int)
                 }
                 Leaf => {
@@ -153,6 +206,9 @@ impl Octree {
         }
     }
 
+    pub fn stats(&self) {
+        println!("elem used: {}, capacity: {}", self.pool.len(), self.pool.capacity());
+    }
 }
 
 // TODO: make this labelling follow the same direction as morton sort
