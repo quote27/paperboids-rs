@@ -7,8 +7,7 @@ extern crate debug; //to print out type of variable at runtime
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::rand;
-use std::sync::{Arc, Barrier, Future, RWLock};
-use std::collections::TreeMap;
+use std::sync::{Arc, RWLock};
 use nalgebra::na::{Vec2, Vec3};
 use nalgebra::na;
 use kiss3d::window::Window;
@@ -18,7 +17,7 @@ use kiss3d::scene::SceneNode;
 use kiss3d::light;
 
 use utils::{Timer, TimeMap, AABB, min, max};
-use octree::Octree;
+use octree::{Octree};
 
 mod octree;
 mod utils;
@@ -214,7 +213,8 @@ fn main() {
     let debug = false;
     let follow_first_bird = false;
     let show_z_order = false;
-    let show_look_radius = false;
+    let show_look_radius = true;
+    let show_octree_leaves = true;
 
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
@@ -338,16 +338,26 @@ fn main() {
         time_map.update(_zsort, section_t.stop());
 
         // Octree build start
-        section_t.start();
         octree.reset(world_box);
         {
             let ps = shared_ps.read();
+            section_t.start();
             octree.insert(&*ps);
-        }
-        time_map.update(_octree_build, section_t.stop());
+            time_map.update(_octree_build, section_t.stop());
 
-        //section_t.start();
-        //time_map.update(_octree_update, section_t.stop());
+            section_t.start();
+            octree.update(&*ps);
+            time_map.update(_octree_update, section_t.stop());
+
+            if show_octree_leaves {
+                for o in octree.pool.iter() {
+                    let PlaneId(pid) = o.plane_id; // TODO: for some reason can't check enum state, so checking id for now
+                    if pid != -1 {
+                        tmp_draw_aabb(&mut window, &o.b);
+                    }
+                }
+            }
+        }
 
         let (tx, rx) = channel();
 
@@ -466,34 +476,34 @@ fn main() {
 
         let dt  = (curr_time - last_time) as f32 / 1e9; // in seconds
 
-        let mut update_birds_t = Timer::new();
-        let mut update_birds_inner_t = Timer::new();
-        let mut update_birds_inner2_t = Timer::new();
-        let mut update_birds_inner_v = 0.0;
-        let mut update_birds_inner2_v = 0.0;
-        update_birds_t.start();
+        //let mut update_birds_t = Timer::new();
+        //let mut update_birds_inner_t = Timer::new();
+        //let mut update_birds_inner2_t = Timer::new();
+        //let mut update_birds_inner_v = 0.0;
+        //let mut update_birds_inner2_v = 0.0;
+        //update_birds_t.start();
         for _ in range(0, threads) {
             let (tid, thread_time, acc_list) = rx.recv();
             let start_id = tid * work_size;
             *thread_times.get_mut(tid) = thread_times[tid] + thread_time;
 
-            update_birds_inner_t.start();
+            //update_birds_inner_t.start();
             for i in range(start_id, start_id + acc_list.len()) {
                 let mut ps = shared_ps.write();
                 {
-                    update_birds_inner2_t.start();
+                    //update_birds_inner2_t.start();
                     let p = ps.get_mut(i);
                     p.acc = acc_list[i - start_id];
                     p.update(dt, world_scale);
                     p.update_node(pnodes.get_mut(i));
-                    update_birds_inner2_v += update_birds_inner2_t.stop();
+                    //update_birds_inner2_v += update_birds_inner2_t.stop();
                 }
             }
-            update_birds_inner_v += update_birds_inner_t.stop();
+            //update_birds_inner_v += update_birds_inner_t.stop();
         }
-        time_map.update(_update_birds, update_birds_t.stop());
-        time_map.update(_update_birds_inner_wait, update_birds_inner_t.stop());
-        time_map.update(_update_birds_inner, update_birds_inner2_t.stop());
+        //time_map.update(_update_birds, update_birds_t.stop());
+        //time_map.update(_update_birds_inner_wait, update_birds_inner_v);
+        //time_map.update(_update_birds_inner, update_birds_inner2_v);
 
         if debug {
             let ps = shared_ps.read();
@@ -515,7 +525,7 @@ fn main() {
             arc_ball.look_at_z(p.pos, p.pos + p.vel);
         }
 
-        //draw_axis(&mut window);
+        draw_axis(&mut window);
 
         time_map.update(_frame, frame_t.stop());
         frame_avg += frame_t.elapsedms();
@@ -533,7 +543,10 @@ fn main() {
                 *t = 0.0;
             }
             println!("");
+            print!("      // octree stats: ");
+            octree.stats();
             frame_count = 0;
+            frame_avg = 0.0;
             time_map.clear();
         }
         last_time = curr_time;
@@ -597,3 +610,34 @@ fn z_order_planes(ps: &Vec<Plane>) -> Vec<(uint, u32)> {
 
     zord_id
 }
+
+fn tmp_draw_aabb(w: &mut Window, b: &AABB) {
+    let y = Vec3::new(1.0, 1.0, 0.0);
+    let c: [Vec3<f32>, ..8] = [
+        Vec3::new(b.l.x, b.l.y, b.l.z),
+        Vec3::new(b.h.x, b.l.y, b.l.z),
+        Vec3::new(b.l.x, b.h.y, b.l.z),
+        Vec3::new(b.h.x, b.h.y, b.l.z),
+
+        Vec3::new(b.l.x, b.l.y, b.h.z),
+        Vec3::new(b.h.x, b.l.y, b.h.z),
+        Vec3::new(b.l.x, b.h.y, b.h.z),
+        Vec3::new(b.h.x, b.h.y, b.h.z),
+    ];
+
+    w.draw_line(&c[0], &c[1], &y);
+    w.draw_line(&c[1], &c[3], &y);
+    w.draw_line(&c[3], &c[2], &y);
+    w.draw_line(&c[2], &c[0], &y);
+
+    w.draw_line(&c[0], &c[4], &y);
+    w.draw_line(&c[2], &c[6], &y);
+    w.draw_line(&c[1], &c[5], &y);
+    w.draw_line(&c[3], &c[7], &y);
+
+    w.draw_line(&c[4], &c[5], &y);
+    w.draw_line(&c[5], &c[7], &y);
+    w.draw_line(&c[7], &c[6], &y);
+    w.draw_line(&c[6], &c[4], &y);
+}
+
