@@ -1,7 +1,6 @@
 extern crate time;
 
 use nalgebra::na::{Vec3};
-use nalgebra::na;
 use std::collections::TreeMap;
 
 pub struct Timer { s: u64, e: u64, }
@@ -68,10 +67,6 @@ pub struct AABB {
 impl AABB {
     pub fn new(low: Vec3<f32>, high: Vec3<f32>) -> AABB {
         AABB { l: low, h: high, }
-    }
-
-    pub fn empty() -> AABB {
-        AABB { l: na::zero(), h: na::zero() }
     }
 
     #[inline(always)]
