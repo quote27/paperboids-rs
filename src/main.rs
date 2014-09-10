@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::rand;
 use std::sync::{Arc, Barrier, Future, RWLock};
+use std::collections::TreeMap;
 use nalgebra::na::{Vec2, Vec3};
 use nalgebra::na;
 use kiss3d::window::Window;
@@ -16,7 +17,7 @@ use kiss3d::resource::Mesh;
 use kiss3d::scene::SceneNode;
 use kiss3d::light;
 
-use utils::{Timer, AABB, min, max};
+use utils::{Timer, TimeMap, AABB, min, max};
 use octree::Octree;
 
 mod octree;
@@ -196,6 +197,14 @@ fn avoid_cylinder_v(p: &Plane, collide_radius2: f32, cyl_pos: &Vec3<f32>, cyl_h:
     }
 }
 
+// used to capture timing data
+static _frame: &'static str = "00.frame";
+static _zsort: &'static str = "01.zsort";
+static _octree_build: &'static str = "02.octree_build";
+static _octree_update: &'static str = "03.octree_update";
+static _update_birds: &'static str = "04.0.update_birds";
+static _update_birds_inner_wait: &'static str = "04.1.update_birds_inner_wait";
+static _update_birds_inner: &'static str = "04.2.update_birds_inner";
 
 fn main() {
     let mut window = Window::new("Kiss3d: cube");
@@ -204,7 +213,7 @@ fn main() {
 
     let debug = false;
     let follow_first_bird = false;
-    let show_z_order = true;
+    let show_z_order = false;
     let show_look_radius = false;
 
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
@@ -288,21 +297,26 @@ fn main() {
     let threads = 4u;
     let work_size = num_planes / threads;
 
+    // timing values - usage: time_map.insert(OctreeBuild, timer.elapsedms());
+    let mut time_map = TimeMap::new();
+
     let mut last_time = time::precise_time_ns();
     let mut curr_time;
 
     let mut frame_count = 0u;
-    let mut frame_times: [f64, ..7] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; // spot 0 is total
-    let mut thread_times: Vec<f64> = Vec::with_capacity(threads);
-    for i in range(0, threads) {
-        thread_times.push(0.0);
-    }
+    let mut thread_times: Vec<f64> = Vec::from_fn(threads, |_| 0.0);
 
+    let mut frame_t = Timer::new();
+    let mut frame_avg = 0.0;
+    let mut section_t = Timer::new();
+
+    println!("starting main loop");
     while window.render_with_camera(&mut arc_ball) {
-        let mut frame_t = Timer::new();
         frame_t.start();
         curr_time = time::precise_time_ns();
 
+        // ZSort start
+        section_t.start();
         let mut sorted; // (plane id, morton value)
         {
             let lock = shared_ps.read();
@@ -321,15 +335,19 @@ fn main() {
             }
         }
         let sorted = sorted;
-        frame_times[6] += frame_t.stop();
+        time_map.update(_zsort, section_t.stop());
 
+        // Octree build start
+        section_t.start();
         octree.reset(world_box);
         {
             let ps = shared_ps.read();
             octree.insert(&*ps);
         }
+        time_map.update(_octree_build, section_t.stop());
 
-        //println!("sort: {}", frame_t.stop());
+        //section_t.start();
+        //time_map.update(_octree_update, section_t.stop());
 
         let (tx, rx) = channel();
 
@@ -445,13 +463,14 @@ fn main() {
                 tx.send((tid, thread_t.stop(), acc_list));
             });
         }
-        frame_times[1] = frame_t.stop();
 
         let dt  = (curr_time - last_time) as f32 / 1e9; // in seconds
 
         let mut update_birds_t = Timer::new();
         let mut update_birds_inner_t = Timer::new();
         let mut update_birds_inner2_t = Timer::new();
+        let mut update_birds_inner_v = 0.0;
+        let mut update_birds_inner2_v = 0.0;
         update_birds_t.start();
         for _ in range(0, threads) {
             let (tid, thread_time, acc_list) = rx.recv();
@@ -467,13 +486,14 @@ fn main() {
                     p.acc = acc_list[i - start_id];
                     p.update(dt, world_scale);
                     p.update_node(pnodes.get_mut(i));
-                    frame_times[5] += update_birds_inner2_t.stop();
+                    update_birds_inner2_v += update_birds_inner2_t.stop();
                 }
             }
-            frame_times[4] += update_birds_inner_t.stop();
+            update_birds_inner_v += update_birds_inner_t.stop();
         }
-        frame_times[3] += update_birds_t.stop();
-        frame_times[2] += frame_t.stop();
+        time_map.update(_update_birds, update_birds_t.stop());
+        time_map.update(_update_birds_inner_wait, update_birds_inner_t.stop());
+        time_map.update(_update_birds_inner, update_birds_inner2_t.stop());
 
         if debug {
             let ps = shared_ps.read();
@@ -497,27 +517,24 @@ fn main() {
 
         //draw_axis(&mut window);
 
-        frame_times[0] += frame_t.stop();
-        //println!("frame: {}, sub: {} {} {} {} {}, update: {}", f_end - f_start, times[0], times[1], times[2], times[3], times[4], times[5]);
+        time_map.update(_frame, frame_t.stop());
+        frame_avg += frame_t.elapsedms();
         frame_count += 1;
         if frame_count % 60 == 0 {
-            for i in range(0, 7) {
-                frame_times[i] /= frame_count as f64;
-            }
+            time_map.avg(frame_count);
             for t in thread_times.mut_iter() {
                 *t = *t / frame_count as f64;
             }
-            println!("avg last 60 frames: {:.2} - steps: {:.2} {:.2} - breakdown: {:.2} {:.2} {:.2} {:.2}", frame_times[0], frame_times[1], frame_times[2], frame_times[3], frame_times[4], frame_times[5], frame_times[6]);
-            print!("threads: ");
+            frame_avg /= frame_count as f64;
+            println!("{:.2} // {}", frame_avg, time_map.tm);
+            print!("      // threads: ");
             for t in thread_times.mut_iter() {
                 print!("{} ", *t);
                 *t = 0.0;
             }
             println!("");
             frame_count = 0;
-            for i in range(0, 7) {
-                frame_times[i] = 0.0;
-            }
+            time_map.clear();
         }
         last_time = curr_time;
     }

@@ -1,7 +1,8 @@
 extern crate time;
 
-use nalgebra::na::{Vec2, Vec3};
+use nalgebra::na::{Vec3};
 use nalgebra::na;
+use std::collections::TreeMap;
 
 pub struct Timer { s: u64, e: u64, }
 impl Timer {
@@ -23,6 +24,38 @@ impl Timer {
     #[inline(always)]
     pub fn elapsedms(&self) -> f64 {
         (self.e - self.s) as f64 / 1e6 //nanoseconds -> ms
+    }
+}
+
+pub struct TimeMap {
+    pub tm: TreeMap<&'static str, f64>,
+}
+
+impl TimeMap {
+    pub fn new() -> TimeMap {
+        TimeMap {
+            tm: TreeMap::new(),
+        }
+    }
+
+    pub fn update(&mut self, s: &'static str, time: f64) {
+        let t = match self.tm.find(&s) {
+            None => time,
+            Some(v) => time + *v,
+        };
+
+        self.tm.insert(s, t);
+    }
+
+    pub fn avg(&mut self, count: uint) {
+        let count = count as f64;
+        for (_, value) in self.tm.mut_iter() {
+            *value /= count;
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.tm.clear();
     }
 }
 
