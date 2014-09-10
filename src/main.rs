@@ -17,7 +17,7 @@ use kiss3d::scene::SceneNode;
 use kiss3d::light;
 
 use utils::{Timer, TimeMap, AABB, min, max};
-use octree::{Octree};
+use octree::{Octree, Octnode, OctnodeId};
 
 mod octree;
 mod utils;
@@ -32,6 +32,8 @@ fn start(argc: int, argv: *const *const u8) -> int {
 // TODO: check out recorder demo to create mpg's of simulations
 
 // TODO: opt; instead of filtering at every rule, do one filter pass and call each of the rules
+
+// TODO: note: don't have to divide a vector by number of elements if its just going to be normalized in the end [ex: collision]
 
 struct PlaneId(int);
 
@@ -213,8 +215,8 @@ fn main() {
     let debug = false;
     let follow_first_bird = false;
     let show_z_order = false;
-    let show_look_radius = true;
-    let show_octree_leaves = true;
+    let show_look_radius = false;
+    let show_octree_leaves = false;
 
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
@@ -384,44 +386,50 @@ fn main() {
 
                 for i in range(start_id, start_id + work_size) {
                     let mut rules: [Vec3<f32>, ..5] = [na::zero(), na::zero(), na::zero(), na::zero(), na::zero()];
-                    let mut neighbors = 0u;
-                    let mut colliders = 0u;
+                    // let mut neighbors = 0u;
+                    // let mut colliders = 0u;
 
                     {
                         let p = &ps[i];
 
-                        for j in range(0, num_planes) {
-                            if i == j { continue; }
+                        // for j in range(0, num_planes) {
+                        //     if i == j { continue; }
 
-                            let o = &ps[j];
+                        //     let o = &ps[j];
 
-                            let disp = o.pos - p.pos;
-                            let dist2 = na::sqnorm(&disp);
+                        //     let disp = o.pos - p.pos;
+                        //     let dist2 = na::sqnorm(&disp);
 
-                            if dist2 < look_radius2 {
-                                neighbors += 1;
+                        //     if dist2 < look_radius2 {
+                        //         neighbors += 1;
 
-                                // fly to center
-                                rules[2] = rules[2] + o.pos;
+                        //         // fly to center
+                        //         rules[2] = rules[2] + o.pos;
 
-                                // fly in the same direction
-                                rules[3] = rules[3] + o.vel;
+                        //         // fly in the same direction
+                        //         rules[3] = rules[3] + o.vel;
 
-                                // avoid others
-                                if dist2 < collide_radius2 {
-                                    colliders += 1;
-                                    rules[1] = rules[1] - (disp / dist2);
-                                }
-                            }
-                        }
+                        //         // avoid others
+                        //         if dist2 < collide_radius2 {
+                        //             colliders += 1;
+                        //             rules[1] = rules[1] - (disp / dist2);
+                        //         }
+                        //     }
+                        // }
 
-                        if neighbors > 0 {
-                            rules[2] = na::normalize(&(rules[2] / neighbors as f32 - p.pos)) * weights[2];
-                            rules[3] = na::normalize(&(rules[3] / neighbors as f32)) * weights[3];
-                        }
-                        if colliders > 0 {
-                            rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
-                        }
+                        // if neighbors > 0 {
+                        //     rules[2] = na::normalize(&(rules[2] / neighbors as f32 - p.pos)) * weights[2];
+                        //     rules[3] = na::normalize(&(rules[3] / neighbors as f32)) * weights[3];
+                        // }
+                        // if colliders > 0 {
+                        //     rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
+                        // }
+
+                        let (r1, r2, r3) = calc_rules(ps, num_planes, i, look_radius2, collide_radius2);
+                        //let (r1, r2, r3) = calc_rules_octree(ps, num_planes, i, &octree, look_radius2, collide_radius2);
+                        rules[1] = r1 * weights[1];
+                        rules[2] = r2 * weights[2];
+                        rules[3] = r3 * weights[3];
 
                         rules[4] = bounds_v(p, &fly_bbox) * weights[4];
 
@@ -641,3 +649,141 @@ fn tmp_draw_aabb(w: &mut Window, b: &AABB) {
     w.draw_line(&c[6], &c[4], &y);
 }
 
+// returns normalized results
+fn calc_rules(ps: &[Plane], num_planes: uint, i: uint, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
+    let p = &ps[i];
+    let mut r1: Vec3<f32> = na::zero();
+    let mut r2: Vec3<f32> = na::zero();
+    let mut r3: Vec3<f32> = na::zero();
+    let mut neighbors = 0u;
+    let mut colliders = 0u;
+
+    for j in range(0, num_planes) {
+        if i == j { continue; }
+
+        let o = &ps[j];
+
+        let disp = o.pos - p.pos;
+        let dist2 = na::sqnorm(&disp);
+
+        if dist2 < look_radius2 {
+            neighbors += 1;
+
+            // fly to center
+            r2 = r2 + o.pos;
+
+            // fly in the same direction
+            r3 = r3 + o.vel;
+
+            // avoid others
+            if dist2 < collide_radius2 {
+                colliders += 1;
+                r1 = r1 - (disp / dist2);
+            }
+        }
+    }
+
+    if neighbors > 0 {
+        r2 = na::normalize(&(r2 / neighbors as f32 - p.pos));
+        r3 = na::normalize(&r3);
+    }
+    if colliders > 0 {
+        r1 = na::normalize(&r1);
+    }
+    (r1, r2, r3)
+}
+
+struct TraversalConst<'a, 'b, 'c> {
+    ps: &'a [Plane],
+    num_planes: uint,
+    p: &'b Plane,
+    pid: uint,
+    octree: &'c Octree,
+    look_radius2: f32,
+    collide_radius2: f32,
+    theta: f32,
+}
+
+struct TraversalRecur {
+    r1: Vec3<f32>,
+    r2: Vec3<f32>,
+    r3: Vec3<f32>,
+    neighbors: uint,
+    colliders: uint,
+}
+
+fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
+    let p = &ps[pid];
+    let tc = TraversalConst {
+        ps: ps,
+        num_planes: num_planes,
+        p: p,
+        pid: pid,
+        octree: octree,
+        look_radius2: look_radius2,
+        collide_radius2: collide_radius2,
+        theta: 2.0, // TODO: figure out this value
+    };
+
+    let mut tr = TraversalRecur {
+        r1: na::zero(),
+        r2: na::zero(),
+        r3: na::zero(),
+        neighbors: 0u,
+        colliders: 0u,
+    };
+
+    traverse_octree(&tc, &mut tr, tc.octree.root);
+
+    if tr.neighbors > 0 {
+        tr.r2 = na::normalize(&(tr.r2 / tr.neighbors as f32 - p.pos));
+        tr.r3 = na::normalize(&tr.r3);
+    }
+    if tr.colliders > 0 {
+        tr.r1 = na::normalize(&tr.r1);
+    }
+
+    (tr.r1, tr.r2, tr.r3)
+}
+
+fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: OctnodeId) {
+    if !curr.is_pos() { //TODO: should be impossible, but still
+        return;
+    }
+
+    let o = tc.octree.get_node(curr);
+    let dv = tc.p.pos - o.c;
+    let d = na::norm(&dv);
+
+   if o.is_leaf() {
+       if d < 1e-6 { return } // skip self
+
+       single_interact(tc, tr, o, &dv, d);
+   } else if d / o.width() >= tc.theta {
+       // close enough, use averages
+       single_interact(tc, tr, o, &dv, d);
+   } else {
+       for i in range(0, 8) {
+           let cid = o.child[i];
+           if cid.is_pos() {
+               traverse_octree(tc, tr, cid);
+           }
+       }
+   }
+}
+
+fn single_interact(tc: &TraversalConst, tr: &mut TraversalRecur, o: &Octnode, dv: &Vec3<f32>, d: f32) {
+    let d2 = d*d;
+
+    if d2 < tc.look_radius2 {
+        tr.neighbors += 1;
+
+        tr.r2 = tr.r2 + o.c;
+        tr.r3 = tr.r3 + o.v;
+
+        if d2 < tc.collide_radius2 {
+            tr.colliders += 1;
+            tr.r1 = tr.r1 - dv / d2;
+        }
+    }
+}

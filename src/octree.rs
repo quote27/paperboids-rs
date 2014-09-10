@@ -6,7 +6,13 @@ use nalgebra::na;
 
 use super::{Plane, PlaneId};
 
-struct OctnodeId(int);
+pub struct OctnodeId(int);
+impl OctnodeId {
+    pub fn is_pos(&self) -> bool {
+        let OctnodeId(id) = *self;
+        id >= 0i
+    }
+}
 
 enum OctnodeState {
     Empty,
@@ -14,16 +20,16 @@ enum OctnodeState {
     Node,
 }
 
-struct Octnode {
+pub struct Octnode {
     parent: OctnodeId,
-    child: [OctnodeId, ..8],
+    pub child: [OctnodeId, ..8],
     pub plane_id: PlaneId, //TODO: convert to vector
 
     pub b: AABB,
     pub state: OctnodeState,
 
-    c: Vec3<f32>, // flock center
-    v: Vec3<f32>, // flock direction [average, but not normalized]
+    pub c: Vec3<f32>, // flock center
+    pub v: Vec3<f32>, // flock direction [average, but not normalized]
 }
 
 impl Octnode {
@@ -55,15 +61,23 @@ impl Octnode {
     }
 
     #[inline(always)]
-    fn width(&self) -> f32{
+    pub fn width(&self) -> f32 {
         self.b.xlen()
+    }
+
+    #[inline(always)]
+    pub fn is_leaf(&self) -> bool {
+        match self.state {
+            Leaf => true,
+            _ => false,
+        }
     }
 }
 
 // ---
 
 pub struct Octree {
-    root: OctnodeId,
+    pub root: OctnodeId,
     pub pool: Vec<Octnode>,
 }
 
@@ -208,6 +222,12 @@ impl Octree {
 
     pub fn stats(&self) {
         println!("elem used: {}, capacity: {}", self.pool.len(), self.pool.capacity());
+    }
+
+    pub fn get_node(&self, oid: OctnodeId) -> &Octnode {
+        let OctnodeId(id) = oid;
+        let id = id as uint;
+        &self.pool[id]
     }
 }
 
