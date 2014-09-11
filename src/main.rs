@@ -216,12 +216,12 @@ fn main() {
     let follow_first_bird = false;
     let show_z_order = false;
     let show_look_radius = false;
-    let show_octree_leaves = false;
+    let show_octree_leaves = true;
 
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
-    let world_scale = 0.2;
-    let look_radius = 20.0 * world_scale;
+    let world_scale = 0.5;
+    let look_radius = 30.0 * world_scale;
     let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
 
     let look_radius2 = look_radius * look_radius; // can avoid squareroot for dist calculations
@@ -236,7 +236,7 @@ fn main() {
         30.0, // avoid obstacles
         12.0, // collision avoidance
         8.0,  // flock centering
-        8.0,  // match velocity
+        9.0,  // match velocity
         20.0, // bounds push
     ];
     let max_mag = 100.0;
@@ -431,7 +431,7 @@ fn main() {
                         // }
 
                         //let (r1, r2, r3) = calc_rules(ps, num_planes, i, look_radius2, collide_radius2);
-                        let (r1, r2, r3) = calc_rules_octree(ps, num_planes, i, &*octree, look_radius2, collide_radius2);
+                        let (r1, r2, r3) = calc_rules_octree(ps, num_planes, i, &*octree, look_radius, look_radius2, collide_radius2);
                         rules[1] = r1 * weights[1];
                         rules[2] = r2 * weights[2];
                         rules[3] = r3 * weights[3];
@@ -707,6 +707,7 @@ struct TraversalConst<'a, 'b, 'c> {
     p: &'b Plane,
     //pid: uint,
     octree: &'c Octree,
+    look_radius: f32,
     look_radius2: f32,
     collide_radius2: f32,
     theta: f32,
@@ -718,9 +719,12 @@ struct TraversalRecur {
     r3: Vec3<f32>,
     neighbors: uint,
     colliders: uint,
+    leaves: uint,
+    nodes: uint,
+    small_nodes: uint,
 }
 
-fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
+fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree, look_radius: f32, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
     let p = &ps[pid];
     let tc = TraversalConst {
         //ps: ps,
@@ -728,9 +732,10 @@ fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree,
         p: p,
         //pid: pid,
         octree: octree,
+        look_radius: look_radius,
         look_radius2: look_radius2,
         collide_radius2: collide_radius2,
-        theta: 2.0, // TODO: figure out this value
+        theta: 1.0, // TODO: figure out this value
     };
 
     let mut tr = TraversalRecur {
@@ -739,6 +744,9 @@ fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree,
         r3: na::zero(),
         neighbors: 0u,
         colliders: 0u,
+        leaves: 0u,
+        nodes: 0u,
+        small_nodes: 0u,
     };
 
     traverse_octree(&tc, &mut tr, tc.octree.root);
@@ -751,6 +759,7 @@ fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree,
         tr.r1 = na::normalize(&tr.r1);
     }
 
+    //println!("leaves: {}, nodes: {}, small node: {}", tr.leaves, tr.nodes, tr.small_nodes);
     (tr.r1, tr.r2, tr.r3)
 }
 
@@ -767,9 +776,15 @@ fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: OctnodeId
        if d < 1e-6 { return } // skip self
 
        single_interact(tc, tr, o, &dv, d);
+       tr.leaves += 1;
    } else if d / o.width() >= tc.theta {
        // close enough, use averages
        single_interact(tc, tr, o, &dv, d);
+       tr.nodes += 1;
+   } else if o.width() < tc.look_radius / 4.0 {
+       // arbitrary value, but if the box is inside the look radius, don't merge down
+       single_interact(tc, tr, o, &dv, d);
+       tr.small_nodes += 1;
    } else {
        for i in range(0, 8) {
            let cid = o.child[i];
