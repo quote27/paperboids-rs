@@ -236,13 +236,16 @@ fn main() {
     let at = Vec3::new(world_box.h.x / 2.0, world_box.h.y / 2.0, world_box.h.z / 2.0);
     let mut arc_ball = ArcBall::new(eye, at);
 
-    let weights: [f32, ..5] = [
+    let default_weights  = [
         30.0, // avoid obstacles
         12.0, // collision avoidance
         8.0,  // flock centering
         9.0,  // match velocity
         20.0, // bounds push
     ];
+    let weights =  opt_weights(&args, "weights", default_weights, 5);
+    let shared_weights = Arc::new(weights);
+
     let max_mag = 100.0;
 
     let num_planes = opt_uint(&args, "boids", 5000);
@@ -373,6 +376,7 @@ fn main() {
             //let b = barrier.clone();
             let child_ps = shared_ps.clone();
             let child_octree = shared_octree.clone();
+            let child_weights = shared_weights.clone();
             let tx = tx.clone();
 
             spawn(proc() {
@@ -380,6 +384,7 @@ fn main() {
                 thread_t.start();
                 let lock_ps = child_ps.read();
                 let ps = lock_ps.as_slice();
+                let weights = child_weights.as_slice();
 
                 let octree = child_octree.read();
 
@@ -826,12 +831,13 @@ fn parse_arguments() -> Matches {
 
         optflag("", "followfirst", "follow the first bird"),
 
-        optopt("w", "worldscale", "set world scale", "0.5"),
+        optopt("s", "worldscale", "set world scale", "0.5"),
         optopt("", "lookradius", "set bird look radius", "30.0"),
         optopt("", "collideradius", "set collision check radius", "8.0"),
 
         optopt("t", "threads", "number of threads to use", "4"),
         optopt("b", "boids", "number of boids to use", "100"),
+        optopt("w", "weights", "five (5) comma delimited weights", "30.0,12.0,8.0,8.0,20.0"),
     ];
 
     match getopts(args.tail(), opts) {
@@ -858,4 +864,34 @@ fn opt_uint(args: &Matches, opt: &str, default: uint) -> uint {
         },
         None => default,
     }
+}
+
+fn opt_weights(args: &Matches, opt: &str, default: [f32, ..5], expected_len: uint) -> Vec<f32> {
+    let arr_string = match args.opt_str(opt) {
+        Some(v) => v,
+        None => String::from_str(""),
+    };
+    let elem: Vec<&str> = arr_string.as_slice().split(',').collect();
+
+    let mut result = Vec::with_capacity(elem.len());
+
+    let mut error = false;
+    if elem.len() == expected_len {
+        // try to parse, if fail set error to true
+        for e in elem.iter() {
+            let f = match from_str::<f32>(e.as_slice()) {
+                Some(v) => v,
+                None => { error = true; break; },
+            };
+            result.push(f);
+        }
+    } else {
+        error = true;
+    }
+
+    if error {
+        result = Vec::from_slice(default);
+    }
+
+    result
 }
