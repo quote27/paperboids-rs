@@ -2,12 +2,13 @@ extern crate native;
 extern crate time;
 extern crate kiss3d;
 extern crate nalgebra;
-extern crate debug; //to print out type of variable at runtime
+extern crate getopts;
 
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::rand;
 use std::sync::{Arc, RWLock};
+use getopts::{optopt, optflag, getopts, Matches};
 use nalgebra::na::{Vec2, Vec3};
 use nalgebra::na;
 use kiss3d::window::Window;
@@ -208,21 +209,24 @@ static _update_birds_inner_wait: &'static str = "04.1.update_birds_inner_wait";
 static _update_birds_inner: &'static str = "04.2.update_birds_inner";
 
 fn main() {
+    let args = parse_arguments();
+
     let mut window = Window::new("Kiss3d: cube");
     window.set_framerate_limit(Some(60));
     window.set_light(light::StickToCamera);
 
-    let debug = false;
-    let follow_first_bird = false;
-    let show_z_order = false;
-    let show_look_radius = false;
-    let show_octree_leaves = true;
+    let debug = args.opt_present("debug");
+    let follow_first_bird = args.opt_present("followfirst");
+    let show_z_order = args.opt_present("showzorder");
+    let show_look_radius = args.opt_present("showlookradius");
+    let show_octree_leaves = args.opt_present("showoctreeleaves");
 
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
-    let world_scale = 0.5;
-    let look_radius = 30.0 * world_scale;
-    let collide_radius = 8.0 * world_scale; // TODO: figure out a good collide radius
+    let world_scale = opt_f32(&args, "worldscale", 0.5);
+    let look_radius = opt_f32(&args, "lookradius", 30.0 * world_scale);
+    // TODO: figure out a good collide radius
+    let collide_radius = opt_f32(&args, "collideradius", 8.0 * world_scale);
 
     let look_radius2 = look_radius * look_radius; // can avoid squareroot for dist calculations
     let collide_radius2 = collide_radius * collide_radius;
@@ -241,7 +245,7 @@ fn main() {
     ];
     let max_mag = 100.0;
 
-    let num_planes = 5000u;
+    let num_planes = opt_uint(&args, "boids", 5000);
 
     // TODO: make ground cooler - random heightmap?
     let mut ground = window.add_quad(world_box.xlen(), world_box.zlen(), 1, 1);
@@ -258,9 +262,9 @@ fn main() {
 //    enable_wireframe(&mut sph1);
 //
 //    let cyl_radius = 2.0 * world_scale;
-//    let cyl_height = 40.0;
+//    let cyl_height = world_box.ylen();
 //    let mut cyl1 = window.add_cylinder(cyl_radius, cyl_height);
-//    let cyl1_pos = Vec3::new(-20.0, cyl_height / 2.0, -20.0);
+//    let cyl1_pos = Vec3::new(30.0, cyl_height / 2.0, 40.0);
 //    cyl1.set_local_translation(cyl1_pos);
 //    cyl1.set_color(1.0, 0.0, 0.0);
 //    enable_wireframe(&mut cyl1);
@@ -297,7 +301,7 @@ fn main() {
     let octree = Octree::new(world_box);
     let shared_octree = Arc::new(RWLock::new(octree));
 
-    let threads = 4u;
+    let threads = opt_uint(&args, "threads", 4);
     let work_size = num_planes / threads;
 
     // timing values - usage: time_map.insert(OctreeBuild, timer.elapsedms());
@@ -808,5 +812,50 @@ fn single_interact(tc: &TraversalConst, tr: &mut TraversalRecur, o: &Octnode, dv
             tr.colliders += 1;
             tr.r1 = tr.r1 - dv / d2;
         }
+    }
+}
+
+fn parse_arguments() -> Matches {
+    let args = std::os::args();
+
+    let opts = [
+        optflag("d", "debug", "enable debug mode"),
+        optflag("", "showzorder", "show z-order curve"),
+        optflag("", "showlookradius", "show look radius for each bird"),
+        optflag("", "showoctreeleaves", "show octree leaves"),
+
+        optflag("", "followfirst", "follow the first bird"),
+
+        optopt("w", "worldscale", "set world scale", "0.5"),
+        optopt("", "lookradius", "set bird look radius", "30.0"),
+        optopt("", "collideradius", "set collision check radius", "8.0"),
+
+        optopt("t", "threads", "number of threads to use", "4"),
+        optopt("b", "boids", "number of boids to use", "100"),
+    ];
+
+    match getopts(args.tail(), opts) {
+        Ok(m) => m,
+        Err(f) => fail!(f.to_string()),
+    }
+}
+
+fn opt_f32(args: &Matches, opt: &str, default: f32) -> f32 {
+    match args.opt_str(opt) {
+        Some(v) => match from_str::<f32>(v.as_slice()) {
+            Some(v) => v,
+            None => default,
+        },
+        None => default,
+    }
+}
+
+fn opt_uint(args: &Matches, opt: &str, default: uint) -> uint {
+    match args.opt_str(opt) {
+        Some(v) => match from_str::<uint>(v.as_slice()) {
+            Some(v) => v,
+            None => default,
+        },
+        None => default,
     }
 }
