@@ -22,7 +22,7 @@ impl Timer {
 
     #[inline(always)]
     pub fn elapsedms(&self) -> f64 {
-        (self.e - self.s) as f64 / 1e6 //nanoseconds -> ms
+        (self.e - self.s) as f64 * 1e-6 //nanoseconds -> ms
     }
 }
 
