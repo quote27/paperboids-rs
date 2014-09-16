@@ -36,62 +36,17 @@ fn start(argc: int, argv: *const *const u8) -> int {
 
 // TODO: note: don't have to divide a vector by number of elements if its just going to be normalized in the end [ex: collision]
 
-struct PlaneId(int);
+struct BoidId(int);
 
 #[deriving(Send,Sync,Show)]
-struct Plane {
+struct Boid {
     pos: Vec3<f32>,
     vel: Vec3<f32>,
     acc: Vec3<f32>,
 }
 
-impl Plane {
-    fn gen_mesh() -> Rc<RefCell<Mesh>> {
-        let vertices = vec!(
-            Vec3::new(0.0, 0.0, 1.0), // front / nose
-            Vec3::new(0.75, 0.0, -1.0), // left wing - 'port'
-            Vec3::new(-0.75, 0.0, -1.0), // right wing - 'starboard'
-            Vec3::new(0.0, 0.0, -1.0), // back midpoint between wings
-            Vec3::new(0.0, -0.4, -1.0), // back bottom fin
-        );
-
-        let indices = vec!(
-            Vec3::new(0u32, 1, 3),
-            Vec3::new(0u32, 3, 2),
-            Vec3::new(0u32, 4, 3),
-        );
-
-        Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
-    }
-
-    fn gen_octagon() -> Rc<RefCell<Mesh>> {
-        let vertices = vec!(
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(0.71, 0.0, 0.71),
-            Vec3::new(0.0, 0.0, 1.0),
-            Vec3::new(-0.71, 0.0, 0.71),
-            Vec3::new(-1.0, 0.0, 0.0),
-            Vec3::new(-0.71, 0.0, -0.71),
-            Vec3::new(0.0, 0.0, -1.0),
-            Vec3::new(0.71, 0.0, -0.71),
-        );
-
-        let indices = vec!(
-            Vec3::new(0u32, 1, 2),
-            Vec3::new(0u32, 2, 3),
-            Vec3::new(0u32, 3, 4),
-            Vec3::new(0u32, 4, 5),
-            Vec3::new(0u32, 5, 6),
-            Vec3::new(0u32, 6, 7),
-            Vec3::new(0u32, 7, 8),
-            Vec3::new(0u32, 8, 1),
-        );
-
-        Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
-    }
-
-    fn new(bbox: &AABB) -> Plane {
+impl Boid {
+    fn new(bbox: &AABB) -> Boid {
         let x = bbox.l.x + rand::random::<f32>() * bbox.xlen();
         let y = bbox.l.y + rand::random::<f32>() * bbox.ylen();
         let z = bbox.l.z + rand::random::<f32>() * bbox.zlen();
@@ -100,7 +55,7 @@ impl Plane {
         let vy = 10.0 - rand::random::<f32>() * 20.0;
         let vz = 10.0 - rand::random::<f32>() * 20.0;
 
-        Plane {
+        Boid {
             pos: Vec3::new(x, y, z),
             vel: Vec3::new(vx, vy, vz),
             acc: na::zero(),
@@ -108,7 +63,7 @@ impl Plane {
     }
 
     fn update(&mut self, dt: f32, world_scale: f32) {
-        // TODO: figure out where to put these constants
+        // TODO: figure out where to put these speed constants
         let max_speed = 25.0 * world_scale;
         let min_speed = 4.0 * world_scale;
 
@@ -122,18 +77,9 @@ impl Plane {
 
         self.pos = self.pos + self.vel * dt;
     }
-
-    fn update_node(&mut self, node: &mut SceneNode) {
-        // TODO: figure out up vector for banking
-        node.look_at_z(&self.pos, &(self.pos + self.vel), &Vec3::y()); 
-    }
 } 
 
-//    let perceived_center = ps.iter()
-//        .filter(|ref p| na::norm(&(p.pos - ps[i].pos)) < look_radius)
-//        .fold(na::zero::<Vec3<f32>>(), |a, ref p| { neighbors += 1; a + p.pos });
-
-fn bounds_v(p: &Plane, bbox: &AABB) -> Vec3<f32> {
+fn bounds_v(p: &Boid, bbox: &AABB) -> Vec3<f32> {
     let mut bounds: Vec3<f32> = na::zero();
 
     bounds.x =
@@ -170,7 +116,7 @@ fn bounds_v(p: &Plane, bbox: &AABB) -> Vec3<f32> {
     }
 }
 
-fn avoid_spheres_v(p: &Plane, collide_radius2: f32, sphere_pos: &Vec3<f32>, sphere_r: f32) -> Vec3<f32> {
+fn avoid_spheres_v(p: &Boid, collide_radius2: f32, sphere_pos: &Vec3<f32>, sphere_r: f32) -> Vec3<f32> {
     let disp = *sphere_pos - p.pos;
     let dist2 = na::sqnorm(&disp) - sphere_r * sphere_r; //subtract radius of sphere
     if dist2 < collide_radius2 {
@@ -180,7 +126,7 @@ fn avoid_spheres_v(p: &Plane, collide_radius2: f32, sphere_pos: &Vec3<f32>, sphe
     }
 }
 
-fn avoid_cylinder_v(p: &Plane, collide_radius2: f32, cyl_pos: &Vec3<f32>, cyl_h: f32, cyl_r: f32) -> Vec3<f32> {
+fn avoid_cylinder_v(p: &Boid, collide_radius2: f32, cyl_pos: &Vec3<f32>, cyl_h: f32, cyl_r: f32) -> Vec3<f32> {
     let hh = cyl_h / 2.0;
     if p.pos.y < cyl_pos.y + hh && p.pos.y > cyl_pos.y - hh {
         let p2d = Vec2::new(p.pos.x, p.pos.z);
@@ -223,7 +169,7 @@ fn main() {
 
     let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
-    let world_scale = opt_f32(&args, "worldscale", 0.5);
+    let world_scale = opt_f32(&args, "worldscale", 1.0);
     let look_radius = opt_f32(&args, "lookradius", 30.0 * world_scale);
     // TODO: figure out a good collide radius
     let collide_radius = opt_f32(&args, "collideradius", 8.0 * world_scale);
@@ -248,7 +194,7 @@ fn main() {
 
     let max_mag = 100.0;
 
-    let num_planes = opt_uint(&args, "boids", 5000);
+    let num_planes = opt_uint(&args, "boids", 100);
 
     // TODO: make ground cooler - random heightmap?
     let mut ground = window.add_quad(world_box.xlen(), world_box.zlen(), 1, 1);
@@ -277,12 +223,12 @@ fn main() {
     fly_bbox.scale_center(0.8);
     let fly_bbox = fly_bbox;
 
-    let pmesh = Plane::gen_mesh();
-    let octmesh = Plane::gen_octagon();
+    let pmesh = gen_plane_mesh();
+    let octmesh = gen_octagon_mesh();
     let mut ps = Vec::with_capacity(num_planes);
     let mut pnodes = Vec::with_capacity(num_planes);
     for _ in range(0, num_planes) {
-        ps.push(Plane::new(&fly_bbox));
+        ps.push(Boid::new(&fly_bbox));
 
         let mut node = window.add_mesh(pmesh.clone(), Vec3::new(world_scale, world_scale, world_scale));
         node.set_color(1.0, 1.0, 1.0);
@@ -362,7 +308,7 @@ fn main() {
 
             if show_octree_leaves {
                 for o in octree.pool.iter() {
-                    let PlaneId(pid) = o.plane_id; // TODO: for some reason can't check enum state, so checking id for now
+                    let BoidId(pid) = o.plane_id; // TODO: for some reason can't check enum state, so checking id for now
                     if pid != -1 {
                         tmp_draw_aabb(&mut window, &o.b);
                     }
@@ -517,7 +463,7 @@ fn main() {
                     let p = ps.get_mut(i);
                     p.acc = acc_list[i - start_id];
                     p.update(dt, world_scale);
-                    p.update_node(pnodes.get_mut(i));
+                    update_scenenode(p, pnodes.get_mut(i));
                     //update_birds_inner2_v += update_birds_inner2_t.stop();
                 }
             }
@@ -624,7 +570,7 @@ fn expand_bits(u: u32) -> u32 {
     u
 }
 
-fn z_order_planes(ps: &Vec<Plane>) -> Vec<(uint, u32)> {
+fn z_order_planes(ps: &Vec<Boid>) -> Vec<(uint, u32)> {
     let mut zord_id: Vec<(uint, u32)> = Vec::with_capacity(ps.len());
 
     for i in range(0, ps.len()) {
@@ -667,7 +613,7 @@ fn tmp_draw_aabb(w: &mut Window, b: &AABB) {
 }
 
 // returns normalized results
-fn calc_rules(ps: &[Plane], num_planes: uint, i: uint, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
+fn calc_rules(ps: &[Boid], num_planes: uint, i: uint, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
     let p = &ps[i];
     let mut r1: Vec3<f32> = na::zero();
     let mut r2: Vec3<f32> = na::zero();
@@ -711,9 +657,9 @@ fn calc_rules(ps: &[Plane], num_planes: uint, i: uint, look_radius2: f32, collid
 }
 
 struct TraversalConst<'a, 'b, 'c> {
-    //ps: &'a [Plane],
+    //ps: &'a [Boid],
     //num_planes: uint,
-    p: &'b Plane,
+    p: &'b Boid,
     //pid: uint,
     octree: &'c Octree,
     look_radius: f32,
@@ -733,7 +679,7 @@ struct TraversalRecur {
     small_nodes: uint,
 }
 
-fn calc_rules_octree(ps: &[Plane], num_planes: uint, pid: uint, octree: &Octree, look_radius: f32, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
+fn calc_rules_octree(ps: &[Boid], num_planes: uint, pid: uint, octree: &Octree, look_radius: f32, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
     let p = &ps[pid];
     let tc = TraversalConst {
         //ps: ps,
@@ -894,4 +840,55 @@ fn opt_weights(args: &Matches, opt: &str, default: [f32, ..5], expected_len: uin
     }
 
     result
+}
+
+
+fn gen_plane_mesh() -> Rc<RefCell<Mesh>> {
+    let vertices = vec!(
+        Vec3::new(0.0, 0.0, 1.0), // front / nose
+        Vec3::new(0.75, 0.0, -1.0), // left wing - 'port'
+        Vec3::new(-0.75, 0.0, -1.0), // right wing - 'starboard'
+        Vec3::new(0.0, 0.0, -1.0), // back midpoint between wings
+        Vec3::new(0.0, -0.4, -1.0), // back bottom fin
+        );
+
+    let indices = vec!(
+        Vec3::new(0u32, 1, 3),
+        Vec3::new(0u32, 3, 2),
+        Vec3::new(0u32, 4, 3),
+        );
+
+    Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
+}
+
+fn gen_octagon_mesh() -> Rc<RefCell<Mesh>> {
+    let vertices = vec!(
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::new(0.71, 0.0, 0.71),
+        Vec3::new(0.0, 0.0, 1.0),
+        Vec3::new(-0.71, 0.0, 0.71),
+        Vec3::new(-1.0, 0.0, 0.0),
+        Vec3::new(-0.71, 0.0, -0.71),
+        Vec3::new(0.0, 0.0, -1.0),
+        Vec3::new(0.71, 0.0, -0.71),
+        );
+
+    let indices = vec!(
+        Vec3::new(0u32, 1, 2),
+        Vec3::new(0u32, 2, 3),
+        Vec3::new(0u32, 3, 4),
+        Vec3::new(0u32, 4, 5),
+        Vec3::new(0u32, 5, 6),
+        Vec3::new(0u32, 6, 7),
+        Vec3::new(0u32, 7, 8),
+        Vec3::new(0u32, 8, 1),
+        );
+
+    Rc::new(RefCell::new(Mesh::new(vertices, indices, None, None, false)))
+}
+
+fn update_scenenode(b: &Boid, node: &mut SceneNode) {
+    // TODO: figure out up vector for banking
+    node.look_at_z(&b.pos, &(b.pos + b.vel), &Vec3::y());
 }
