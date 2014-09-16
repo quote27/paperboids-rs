@@ -36,7 +36,7 @@ fn start(argc: int, argv: *const *const u8) -> int {
 
 // TODO: note: don't have to divide a vector by number of elements if its just going to be normalized in the end [ex: collision]
 
-struct BoidId(int);
+struct BoidId(uint);
 
 #[deriving(Send,Sync,Show)]
 struct Boid {
@@ -308,9 +308,9 @@ fn main() {
 
             if show_octree_leaves {
                 for o in octree.pool.iter() {
-                    let BoidId(pid) = o.plane_id; // TODO: for some reason can't check enum state, so checking id for now
-                    if pid != -1 {
-                        tmp_draw_aabb(&mut window, &o.b);
+                    match o.state {
+                        octree::Node => tmp_draw_aabb(&mut window, &o.b),
+                        _ => {},
                     }
                 }
             }

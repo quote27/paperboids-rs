@@ -14,7 +14,7 @@ impl OctnodeId {
     }
 }
 
-enum OctnodeState {
+pub enum OctnodeState {
     Empty,
     Leaf,
     Node,
@@ -35,7 +35,6 @@ pub struct Octnode {
 impl Octnode {
     fn new(parent: OctnodeId, plane_id: BoidId, bbox: AABB, ps: &Vec<Boid>) -> Octnode {
         let BoidId(pid) = plane_id; //TODO: verify: in theory this fn will not be called without a valid plane
-        let pid = pid as uint;
 
         Octnode {
             parent: parent,
@@ -106,7 +105,6 @@ impl Octree {
             Leaf => {
                 // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
                 // let BoidId(pid) = self.pool[cid].plane_id;
-                // let pid = pid as uint;
                 // let o = self.pool.get_mut(cid);
                 // o.c = ps[pid].pos;
                 // o.v = ps[pid].vel;
@@ -152,7 +150,7 @@ impl Octree {
     pub fn insert(&mut self, ps: &Vec<Boid>) {
         let root = self.root;
         let rootb = self.pool[0].b;
-        for i in range(0, ps.len() as int) {
+        for i in range(0, ps.len()) {
             self.insert_recur(root, OctnodeId(-1), ps, BoidId(i), &rootb);
         }
     }
@@ -182,7 +180,7 @@ impl Octree {
                     { // convert to internal node and move self to a child
                         let plane_id = self.pool[cid].plane_id;
                         let BoidId(pid) = plane_id;
-                        let oct = get_octant(&ps[pid as uint].pos, &center);
+                        let oct = get_octant(&ps[pid].pos, &center);
                         let new_bounds = gen_oct_bounds(oct, bbox, &center);
 
                         let child_id = self.pool[cid].child[oct];
@@ -194,7 +192,7 @@ impl Octree {
                         on.state = Node;
                     }
 
-                    let oct = get_octant(&ps[pid as uint].pos, &center);
+                    let oct = get_octant(&ps[pid].pos, &center);
                     let new_bounds = gen_oct_bounds(oct, bbox, &center);
 
                     let child_id = self.pool[cid].child[oct];
@@ -207,7 +205,7 @@ impl Octree {
                     //println!("internal node");
                     let center = bbox.center();
                     let BoidId(pid) = plane_id;
-                    let oct = get_octant(&ps[pid as uint].pos, &center);
+                    let oct = get_octant(&ps[pid].pos, &center);
                     let new_bounds = gen_oct_bounds(oct, bbox, &center);
 
                     let child_id = self.pool[cid].child[oct];
