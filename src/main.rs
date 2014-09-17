@@ -504,7 +504,7 @@ fn main() {
                 *t = *t / frame_count as f64;
             }
             frame_avg /= frame_count as f64;
-            println!("{:.2} // {}", frame_avg, time_map.tm);
+            println!("{:.2} // {}", frame_avg, time_map);
             print!("      // threads: ");
             for t in thread_times.mut_iter() {
                 print!("{} ", *t);
