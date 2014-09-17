@@ -4,11 +4,12 @@ use nalgebra::na::{Vec3};
 use std::collections::TreeMap;
 use std::fmt::{Show, Formatter, FormatError};
 
-/// A nanosecond resolution timer.
+/// A nanosecond resolution timer.  Results are returned in miliseconds.
+/// This is basically a wrapper around `time::precise_time_ns()`.
 ///
 /// # Examples
 ///
-/// Time one specific section
+/// Time one specific section.
 /// ```
 /// let mut t = Timer::new();
 /// t.start();
@@ -17,7 +18,7 @@ use std::fmt::{Show, Formatter, FormatError};
 /// println!("time: {}", t.elapsedms());
 /// ```
 ///
-/// Time a series of sections with results relative to a starting point
+/// Time a series of sections with results relative to a starting point.
 /// ```
 /// let mut t = Timer::new();
 /// t.start();
@@ -27,13 +28,25 @@ use std::fmt::{Show, Formatter, FormatError};
 /// bar();
 /// println("start -> foo -> bar time: {}", t.stop());
 /// ```
+///
+/// The same timer can be re-used by calling the `start` function again.
+/// ```
+/// let mut t = Timer::new();
+/// t.start();
+/// foo();
+/// t.stop();
+///
+/// t.start();
+/// foo();
+/// t.stop();
+/// ```
 pub struct Timer {
     s: u64,
     e: u64,
 }
 
 impl Timer {
-    /// Creates a new timer
+    /// Creates a new timer.
     ///
     /// # Example
     ///
@@ -44,7 +57,7 @@ impl Timer {
         Timer { s: 0, e: 0 }
     }
 
-    /// Starts the timer
+    /// Starts the timer.
     ///
     /// # Example
     ///
@@ -58,7 +71,7 @@ impl Timer {
         self.s = time::precise_time_ns();
     }
 
-    /// Stops the timer and returns the elapsed time in miliseconds
+    /// Stops the timer and returns the elapsed time in miliseconds.
     ///
     /// # Exxample
     ///
@@ -74,7 +87,7 @@ impl Timer {
         self.elapsedms()
     }
 
-    /// Prints out the elapsed time since the last stopped time
+    /// Prints out the elapsed time since the last stopped time.
     ///
     /// # Example
     ///
@@ -91,17 +104,68 @@ impl Timer {
     }
 }
 
+/// A map to store a collection of timing results.  Wrapper around a
+/// TreeMap<&'static str, f64> to store <string, time> values.
+///
+/// Used to aggregate times for named sections of code.  At the end
+/// of a run, results are averaged and can be printed out.
+///
+/// # Example
+///
+/// ```
+/// let tm = TimeMap::new();
+/// let t = Timer::new(); // Timer from util mod
+/// let states = ["0.move", "1.sort", "2.draw"];
+/// let iter = 1000;
+///
+/// let mut objects = gen_objects();
+///
+/// for i in range(0, iter) {
+///     t.start();
+///     objects.move();
+///     tm.update(states[0], t.end());
+///
+///     t.start();
+///     objects.sort();
+///     tm.update(states[1], t.end());
+///
+///     t.start();
+///     objects.draw();
+///     tm.update(states[2], t.end());
+/// }
+///
+/// tm.avg(iter);
+/// println!("{}", tm);
+/// ```
 pub struct TimeMap {
     tm: TreeMap<&'static str, f64>,
 }
 
 impl TimeMap {
+    /// Creates an empty TimeMap.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut tm = TimeMap::new();
+    /// ```
     pub fn new() -> TimeMap {
         TimeMap {
             tm: TreeMap::new(),
         }
     }
 
+    /// Accumulates a time value in the map.  Creates the entry if it
+    /// doesn't already exist.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut tm = TimeMap::new();
+    ///
+    /// tm.update("a", 1.0); // contents: {a: 1.0}
+    /// tm.update("a", 2.0); // contents: {a: 3.0}
+    /// ```
     pub fn update(&mut self, s: &'static str, time: f64) {
         let t = match self.tm.find(&s) {
             None => time,
@@ -111,6 +175,18 @@ impl TimeMap {
         self.tm.insert(s, t);
     }
 
+    /// Average the results by dividing each entry by `count`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut tm = TimeMap::new();
+    ///
+    /// tm.update("a", 20.0);
+    /// tm.update("b", 10.0);
+    ///
+    /// tm.avg(10); // contents: {a: 2, b: 1}
+    /// ```
     pub fn avg(&mut self, count: uint) {
         let count = count as f64;
         for (_, value) in self.tm.mut_iter() {
@@ -118,6 +194,16 @@ impl TimeMap {
         }
     }
 
+    /// Clear the map.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut tm = TimeMap::new();
+    ///
+    /// tm.update("a", 1.0); // contents: {a: 1.0}
+    /// tm.clear(); // contents: {}
+    /// ```
     pub fn clear(&mut self) {
         self.tm.clear();
     }
