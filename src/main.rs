@@ -9,8 +9,7 @@ use std::cell::RefCell;
 use std::rand;
 use std::sync::{Arc, RWLock};
 use getopts::{optopt, optflag, getopts, Matches};
-use nalgebra::na::{Vec2, Vec3};
-use nalgebra::na;
+use nalgebra::{Vec2, Vec3};
 use kiss3d::window::Window;
 use kiss3d::camera::ArcBall;
 use kiss3d::resource::Mesh;
@@ -58,7 +57,7 @@ impl Boid {
         Boid {
             pos: Vec3::new(x, y, z),
             vel: Vec3::new(vx, vy, vz),
-            acc: na::zero(),
+            acc: nalgebra::zero(),
         }
     }
 
@@ -68,7 +67,7 @@ impl Boid {
         let min_speed = 4.0 * world_scale;
 
         self.vel = self.vel + self.acc * dt;
-        let curr_speed = na::norm(&self.vel);
+        let curr_speed = nalgebra::norm(&self.vel);
         if curr_speed > max_speed {
             self.vel = self.vel / curr_speed * max_speed;
         } else if curr_speed < min_speed {
@@ -80,7 +79,7 @@ impl Boid {
 } 
 
 fn bounds_v(p: &Boid, bbox: &AABB) -> Vec3<f32> {
-    let mut bounds: Vec3<f32> = na::zero();
+    let mut bounds: Vec3<f32> = nalgebra::zero();
 
     bounds.x =
         if p.pos.x > bbox.h.x {
@@ -109,8 +108,8 @@ fn bounds_v(p: &Boid, bbox: &AABB) -> Vec3<f32> {
             0.0
         };
 
-    if bounds != na::zero() {
-        na::normalize(&bounds)
+    if bounds != nalgebra::zero() {
+        nalgebra::normalize(&bounds)
     } else {
         bounds // a zero vector
     }
@@ -118,11 +117,11 @@ fn bounds_v(p: &Boid, bbox: &AABB) -> Vec3<f32> {
 
 fn avoid_spheres_v(p: &Boid, collide_radius2: f32, sphere_pos: &Vec3<f32>, sphere_r: f32) -> Vec3<f32> {
     let disp = *sphere_pos - p.pos;
-    let dist2 = na::sqnorm(&disp) - sphere_r * sphere_r; //subtract radius of sphere
+    let dist2 = nalgebra::sqnorm(&disp) - sphere_r * sphere_r; //subtract radius of sphere
     if dist2 < collide_radius2 {
         -disp / dist2
     } else {
-        na::zero()
+        nalgebra::zero()
     }
 }
 
@@ -133,31 +132,22 @@ fn avoid_cylinder_v(p: &Boid, collide_radius2: f32, cyl_pos: &Vec3<f32>, cyl_h: 
         let c2d = Vec2::new(cyl_pos.x, cyl_pos.z);
 
         let disp = c2d - p2d;
-        let dist2 = na::sqnorm(&disp) - cyl_r * cyl_r; //subtract radius of sphere
+        let dist2 = nalgebra::sqnorm(&disp) - cyl_r * cyl_r; //subtract radius of sphere
         if dist2 < collide_radius2 {
             let v = -disp / dist2;
             Vec3::new(v.x, 0.0, v.y)
         } else {
-            na::zero()
+            nalgebra::zero()
         }
     } else {
-        na::zero()
+        nalgebra::zero()
     }
 }
-
-// used to capture timing data
-static _frame: &'static str = "00.frame";
-static _zsort: &'static str = "01.zsort";
-static _octree_build: &'static str = "02.octree_build";
-static _octree_update: &'static str = "03.octree_update";
-static _update_birds: &'static str = "04.0.update_birds";
-static _update_birds_inner_wait: &'static str = "04.1.update_birds_inner_wait";
-static _update_birds_inner: &'static str = "04.2.update_birds_inner";
 
 fn main() {
     let args = parse_arguments();
 
-    let mut window = Window::new("Kiss3d: cube");
+    let mut window = Window::new("paperboids (kiss3d)");
     window.set_framerate_limit(Some(60));
     window.set_light(light::StickToCamera);
 
@@ -167,7 +157,7 @@ fn main() {
     let show_look_radius = args.opt_present("showlookradius");
     let show_octree_leaves = args.opt_present("showoctreeleaves");
 
-    let world_box = AABB::new(na::zero(), Vec3::new(100.0f32, 100.0, 100.0));
+    let world_box = AABB::new(nalgebra::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
     let world_scale = opt_f32(&args, "worldscale", 1.0);
     let look_radius = opt_f32(&args, "lookradius", 30.0 * world_scale);
@@ -254,6 +244,14 @@ fn main() {
     let work_size = num_planes / threads;
 
     // timing values - usage: time_map.insert(OctreeBuild, timer.elapsedms());
+    let _frame = "00.frame";
+    let _zsort = "01.zsort";
+    let _octree_build = "02.octree_build";
+    let _octree_update = "03.octree_update";
+    let _update_birds = "04.0.update_birds";
+    let _update_birds_inner_wait = "04.1.update_birds_inner_wait";
+    let _update_birds_inner = "04.2.update_birds_inner";
+
     let mut time_map = TimeMap::new();
 
     let mut last_time = time::precise_time_ns();
@@ -345,7 +343,7 @@ fn main() {
                 let mut acc_list = Vec::with_capacity(work_size);
 
                 for i in range(start_id, start_id + work_size) {
-                    let mut rules: [Vec3<f32>, ..5] = [na::zero(), na::zero(), na::zero(), na::zero(), na::zero()];
+                    let mut rules: [Vec3<f32>, ..5] = [nalgebra::zero(), nalgebra::zero(), nalgebra::zero(), nalgebra::zero(), nalgebra::zero()];
                     // let mut neighbors = 0u;
                     // let mut colliders = 0u;
 
@@ -358,7 +356,7 @@ fn main() {
                         //     let o = &ps[j];
 
                         //     let disp = o.pos - p.pos;
-                        //     let dist2 = na::sqnorm(&disp);
+                        //     let dist2 = nalgebra::sqnorm(&disp);
 
                         //     if dist2 < look_radius2 {
                         //         neighbors += 1;
@@ -378,11 +376,11 @@ fn main() {
                         // }
 
                         // if neighbors > 0 {
-                        //     rules[2] = na::normalize(&(rules[2] / neighbors as f32 - p.pos)) * weights[2];
-                        //     rules[3] = na::normalize(&(rules[3] / neighbors as f32)) * weights[3];
+                        //     rules[2] = nalgebra::normalize(&(rules[2] / neighbors as f32 - p.pos)) * weights[2];
+                        //     rules[3] = nalgebra::normalize(&(rules[3] / neighbors as f32)) * weights[3];
                         // }
                         // if colliders > 0 {
-                        //     rules[1] = na::normalize(&(rules[1] / colliders as f32)) * weights[1];
+                        //     rules[1] = nalgebra::normalize(&(rules[1] / colliders as f32)) * weights[1];
                         // }
 
                         //let (r1, r2, r3) = calc_rules(ps, num_planes, i, look_radius2, collide_radius2);
@@ -396,8 +394,8 @@ fn main() {
                         //rules[0] =
                         //    avoid_spheres_v(p, collide_radius2, &sph1_pos, sph_radius) +
                         //    avoid_cylinder_v(p, collide_radius2, &cyl1_pos, cyl_height, cyl_radius);
-                        //if rules[0] != na::zero() {
-                        //    rules[0] = na::normalize(&rules[0]) * weights[0];
+                        //if rules[0] != nalgebra::zero() {
+                        //    rules[0] = nalgebra::normalize(&rules[0]) * weights[0];
                         //}
 
                         // TODO: figure out debug when in thread mode
@@ -412,11 +410,11 @@ fn main() {
 
                     let mut mag = 0.0; // magnitude
 
-                    let mut acc: Vec3<f32> = na::zero();
+                    let mut acc: Vec3<f32> = nalgebra::zero();
 
                     for r in range(0, 5) {
                         // TODO: minor optimization? use non-sqrt norm
-                        let m = na::norm(&rules[r]);
+                        let m = nalgebra::norm(&rules[r]);
 
                         if m == 0.0 { continue; }
 
@@ -478,7 +476,7 @@ fn main() {
             for i in range(0, num_planes) {
                 let p = (*ps)[i];
                 //println!("{}: pos: {}, vel: {}", i, p.pos, p.vel);
-                if p.pos == na::zero() {
+                if p.pos == nalgebra::zero() {
                     println!("zero position vector: id: {}", i);
                 }
                 if !p.pos.x.is_finite() || !p.pos.y.is_finite() || !p.pos.z.is_finite() {
@@ -500,13 +498,13 @@ fn main() {
         frame_count += 1;
         if frame_count % 60 == 0 {
             time_map.avg(frame_count);
-            for t in thread_times.mut_iter() {
+            for t in thread_times.iter_mut() {
                 *t = *t / frame_count as f64;
             }
             frame_avg /= frame_count as f64;
             println!("{:.2} // {}", frame_avg, time_map);
             print!("      // threads: ");
-            for t in thread_times.mut_iter() {
+            for t in thread_times.iter_mut() {
                 print!("{} ", *t);
                 *t = 0.0;
             }
@@ -532,7 +530,7 @@ fn main() {
 }
 
 fn draw_axis(w: &mut Window) {
-    let o: Vec3<f32> = na::zero();
+    let o: Vec3<f32> = nalgebra::zero();
     let x = Vec3::x();
     let y = Vec3::y();
     let z = Vec3::z();
@@ -615,9 +613,9 @@ fn tmp_draw_aabb(w: &mut Window, b: &AABB) {
 // returns normalized results
 fn calc_rules(ps: &[Boid], num_planes: uint, i: uint, look_radius2: f32, collide_radius2: f32) -> (Vec3<f32>, Vec3<f32>, Vec3<f32>) {
     let p = &ps[i];
-    let mut r1: Vec3<f32> = na::zero();
-    let mut r2: Vec3<f32> = na::zero();
-    let mut r3: Vec3<f32> = na::zero();
+    let mut r1: Vec3<f32> = nalgebra::zero();
+    let mut r2: Vec3<f32> = nalgebra::zero();
+    let mut r3: Vec3<f32> = nalgebra::zero();
     let mut neighbors = 0u;
     let mut colliders = 0u;
 
@@ -627,7 +625,7 @@ fn calc_rules(ps: &[Boid], num_planes: uint, i: uint, look_radius2: f32, collide
         let o = &ps[j];
 
         let disp = o.pos - p.pos;
-        let dist2 = na::sqnorm(&disp);
+        let dist2 = nalgebra::sqnorm(&disp);
 
         if dist2 < look_radius2 {
             neighbors += 1;
@@ -647,11 +645,11 @@ fn calc_rules(ps: &[Boid], num_planes: uint, i: uint, look_radius2: f32, collide
     }
 
     if neighbors > 0 {
-        r2 = na::normalize(&(r2 / neighbors as f32 - p.pos));
-        r3 = na::normalize(&r3);
+        r2 = nalgebra::normalize(&(r2 / neighbors as f32 - p.pos));
+        r3 = nalgebra::normalize(&r3);
     }
     if colliders > 0 {
-        r1 = na::normalize(&r1);
+        r1 = nalgebra::normalize(&r1);
     }
     (r1, r2, r3)
 }
@@ -694,9 +692,9 @@ fn calc_rules_octree(ps: &[Boid], num_planes: uint, pid: uint, octree: &Octree, 
     };
 
     let mut tr = TraversalRecur {
-        r1: na::zero(),
-        r2: na::zero(),
-        r3: na::zero(),
+        r1: nalgebra::zero(),
+        r2: nalgebra::zero(),
+        r3: nalgebra::zero(),
         neighbors: 0u,
         colliders: 0u,
         leaves: 0u,
@@ -707,11 +705,11 @@ fn calc_rules_octree(ps: &[Boid], num_planes: uint, pid: uint, octree: &Octree, 
     traverse_octree(&tc, &mut tr, tc.octree.root);
 
     if tr.neighbors > 0 {
-        tr.r2 = na::normalize(&(tr.r2 / tr.neighbors as f32 - p.pos));
-        tr.r3 = na::normalize(&tr.r3);
+        tr.r2 = nalgebra::normalize(&(tr.r2 / tr.neighbors as f32 - p.pos));
+        tr.r3 = nalgebra::normalize(&tr.r3);
     }
     if tr.colliders > 0 {
-        tr.r1 = na::normalize(&tr.r1);
+        tr.r1 = nalgebra::normalize(&tr.r1);
     }
 
     //println!("leaves: {}, nodes: {}, small node: {}", tr.leaves, tr.nodes, tr.small_nodes);
@@ -725,7 +723,7 @@ fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: OctnodeId
 
     let o = tc.octree.get_node(curr);
     let dv = o.c - tc.p.pos;
-    let d = na::norm(&dv);
+    let d = nalgebra::norm(&dv);
 
    if o.is_leaf() {
        if d < 1e-6 { return } // skip self
@@ -836,7 +834,7 @@ fn opt_weights(args: &Matches, opt: &str, default: [f32, ..5], expected_len: uin
     }
 
     if error {
-        result = Vec::from_slice(default);
+        result = default.to_vec(); //Vec::from_slice(default);
     }
 
     result

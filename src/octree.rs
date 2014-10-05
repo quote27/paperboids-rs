@@ -1,8 +1,7 @@
 extern crate nalgebra;
 
 use utils::AABB;
-use nalgebra::na::Vec3;
-use nalgebra::na;
+use nalgebra::Vec3;
 
 use super::{Boid, BoidId};
 
@@ -54,8 +53,8 @@ impl Octnode {
             plane_id: BoidId(-1),
             b: bbox,
             state: Empty,
-            c: na::zero(),
-            v: na::zero(),
+            c: nalgebra::zero(),
+            v: nalgebra::zero(),
         }
     }
 
@@ -110,8 +109,8 @@ impl Octree {
                 // o.v = ps[pid].vel;
             }
             Node => {
-                let mut c: Vec3<f32> = na::zero();
-                let mut v: Vec3<f32> = na::zero();
+                let mut c: Vec3<f32> = nalgebra::zero();
+                let mut v: Vec3<f32> = nalgebra::zero();
                 let mut active_children = 0u;
 
                 for i in range(0, 8) {
@@ -281,7 +280,7 @@ fn gen_oct_bounds(oct: uint, bbox: &AABB, center: &Vec3<f32>) -> AABB {
                  Vec3::new(bbox.h.x, bbox.h.y, center.z))
             }
             _ => {
-                (na::zero(), na::zero())
+                (nalgebra::zero(), nalgebra::zero())
             }
         };
 

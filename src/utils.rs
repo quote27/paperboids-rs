@@ -142,7 +142,7 @@ impl TimeMap {
     /// ```
     pub fn avg(&mut self, count: uint) {
         let count = count as f64;
-        for (_, value) in self.tm.mut_iter() {
+        for (_, value) in self.tm.iter_mut() {
             *value /= count;
         }
     }
