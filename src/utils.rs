@@ -1,6 +1,6 @@
 extern crate time;
 
-use nalgebra::na::{Vec3};
+use nalgebra::Vec3;
 use std::collections::TreeMap;
 use std::fmt::{Show, Formatter, FormatError};
 
