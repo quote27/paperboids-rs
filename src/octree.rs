@@ -6,13 +6,13 @@ use nalgebra::Vec3;
 use super::{Boid, BoidId};
 
 /// Wrapper to contain boid id in main boid pool.
-pub struct OctnodeId(int);
+pub struct OctnodeId(uint);
 
 impl OctnodeId {
     /// Check to see if enclosed uint is not -1.  Reserving -1 to represent a null value
     pub fn is_set(&self) -> bool {
         let OctnodeId(id) = *self;
-        id >= 0
+        id != -1
     }
 }
 
@@ -111,7 +111,6 @@ impl Octree {
     /// Recursive Barnes-Hut update function.
     fn update_recur(&mut self, curr_oid: OctnodeId, ps: &Vec<Boid>) {
         let OctnodeId(curr_id) = curr_oid;
-        let curr_id = curr_id as uint;
         let state = self.pool[curr_id].state;
 
         match state {
@@ -125,9 +124,8 @@ impl Octree {
                 for i in range(0, 8) {
                     let child_oid = self.pool[curr_id].child[i];
 
-                    let OctnodeId(child_id) = child_oid;
-                    if child_id >= 0 {
-                        let child_id = child_id as uint;
+                    if child_oid.is_set() {
+                        let OctnodeId(child_id) = child_oid;
 
                         match self.pool[child_id].state {
                             Node => self.update_recur(child_oid, ps),
@@ -168,14 +166,12 @@ impl Octree {
 
     /// Recursively insert boid to Octree.
     fn insert_recur(&mut self, curr_oid: OctnodeId, parent_oid: OctnodeId, ps: &Vec<Boid>, boid_bid: BoidId, bbox: &AABB) -> OctnodeId {
-        let OctnodeId(curr_id) = curr_oid;
-
-        if curr_id == -1 {
+        if !curr_oid.is_set() {
             //println!("null node, pulling from pool");
             self.pool.push(Octnode::new(parent_oid, boid_bid, *bbox, ps));
-            OctnodeId(self.pool.len() as int - 1)
+            OctnodeId(self.pool.len() - 1)
         } else {
-            let curr_id = curr_id as uint;
+            let OctnodeId(curr_id) = curr_oid;
 
             match self.pool[curr_id].state {
                 Empty => { // this only happens for the first insert case (root node)
@@ -234,7 +230,7 @@ impl Octree {
     /// Return a reference to the Octnode object at index `oid`.
     pub fn get_node(&self, oid: OctnodeId) -> &Octnode {
         let OctnodeId(id) = oid;
-        &self.pool[id as uint]
+        &self.pool[id]
     }
 }
 
