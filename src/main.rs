@@ -717,7 +717,7 @@ fn calc_rules_octree(ps: &[Boid], num_planes: uint, pid: uint, octree: &Octree, 
 }
 
 fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: OctnodeId) {
-    if !curr.is_pos() { //TODO: should be impossible, but still
+    if !curr.is_set() { //TODO: should be impossible, need to verify
         return;
     }
 
@@ -741,7 +741,7 @@ fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: OctnodeId
    } else {
        for i in range(0, 8) {
            let cid = o.child[i];
-           if cid.is_pos() {
+           if cid.is_set() {
                traverse_octree(tc, tr, cid);
            }
        }
