@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rand;
 use std::sync::{Arc, RWLock};
 use getopts::{optopt, optflag, getopts, Matches};
-use nalgebra::{Vec2, Vec3};
+use nalgebra::{Vec2, Vec3, Pnt3};
 use kiss3d::window::Window;
 use kiss3d::camera::ArcBall;
 use kiss3d::resource::Mesh;
@@ -155,7 +155,8 @@ fn main() {
     let follow_first_bird = args.opt_present("followfirst");
     let show_z_order = args.opt_present("showzorder");
     let show_look_radius = args.opt_present("showlookradius");
-    let show_octree_leaves = args.opt_present("showoctreeleaves");
+    //let show_octree = opt_uint("showoctree");
+    let show_octree = 0u; //opt_uint("showoctree");
 
     let world_box = AABB::new(nalgebra::zero(), Vec3::new(100.0f32, 100.0, 100.0));
 
@@ -168,8 +169,8 @@ fn main() {
     let collide_radius2 = collide_radius * collide_radius;
 
     // camera setup
-    let eye = Vec3::new(0.0, world_box.h.y, -world_box.h.z);
-    let at = Vec3::new(world_box.h.x / 2.0, world_box.h.y / 2.0, world_box.h.z / 2.0);
+    let eye = Pnt3::new(0.0, world_box.h.y, -world_box.h.z);
+    let at = Pnt3::new(world_box.h.x / 2.0, world_box.h.y / 2.0, world_box.h.z / 2.0);
     let mut arc_ball = ArcBall::new(eye, at);
 
     let default_weights  = [
@@ -284,7 +285,7 @@ fn main() {
                     let p1 = ps[id1];
                     let p2 = ps[id2];
 
-                    window.draw_line(&p1.pos, &p2.pos, &Vec3::new(0.0, 1.0, 1.0));
+                    window.draw_line(p1.pos.as_pnt(), p2.pos.as_pnt(), &Pnt3::new(0.0, 1.0, 1.0));
                 }
             }
         }
@@ -304,10 +305,15 @@ fn main() {
             octree.update(&*ps);
             time_map.update(_octree_update, section_t.stop());
 
-            if show_octree_leaves {
+            if show_octree > 0 {
                 for o in octree.pool.iter() {
                     match o.state {
-                        octree::Node => tmp_draw_aabb(&mut window, &o.b),
+                        octree::Node => {
+                            if show_octree >= 2 { tmp_draw_aabb(&mut window, &o.b) }
+                        },
+                        octree::Leaf => {
+                            if show_octree == 1 || show_octree == 3 { tmp_draw_aabb(&mut window, &o.b) }
+                        },
                         _ => {},
                     }
                 }
@@ -488,7 +494,7 @@ fn main() {
         if follow_first_bird {
             let ps = shared_ps.read();
             let p = (*ps)[0];
-            arc_ball.look_at_z(p.pos, p.pos + p.vel);
+            arc_ball.look_at_z(*p.pos.as_pnt(), *(p.pos + p.vel).as_pnt());
         }
 
         draw_axis(&mut window);
@@ -530,10 +536,10 @@ fn main() {
 }
 
 fn draw_axis(w: &mut Window) {
-    let o: Vec3<f32> = nalgebra::zero();
-    let x = Vec3::x();
-    let y = Vec3::y();
-    let z = Vec3::z();
+    let o = Pnt3::new(0.0, 0.0, 0.0);
+    let x = Pnt3::new(1.0, 0.0, 0.0);
+    let y = Pnt3::new(0.0, 1.0, 0.0);
+    let z = Pnt3::new(0.0, 0.0, 1.0);
 
     w.draw_line(&o, &x, &x);
     w.draw_line(&o, &y, &y);
@@ -581,17 +587,17 @@ fn z_order_planes(ps: &Vec<Boid>) -> Vec<(uint, u32)> {
 }
 
 fn tmp_draw_aabb(w: &mut Window, b: &AABB) {
-    let y = Vec3::new(1.0, 1.0, 0.0);
-    let c: [Vec3<f32>, ..8] = [
-        Vec3::new(b.l.x, b.l.y, b.l.z),
-        Vec3::new(b.h.x, b.l.y, b.l.z),
-        Vec3::new(b.l.x, b.h.y, b.l.z),
-        Vec3::new(b.h.x, b.h.y, b.l.z),
+    let y = Pnt3::new(1.0, 1.0, 0.0);
+    let c: [Pnt3<f32>, ..8] = [
+        Pnt3::new(b.l.x, b.l.y, b.l.z),
+        Pnt3::new(b.h.x, b.l.y, b.l.z),
+        Pnt3::new(b.l.x, b.h.y, b.l.z),
+        Pnt3::new(b.h.x, b.h.y, b.l.z),
 
-        Vec3::new(b.l.x, b.l.y, b.h.z),
-        Vec3::new(b.h.x, b.l.y, b.h.z),
-        Vec3::new(b.l.x, b.h.y, b.h.z),
-        Vec3::new(b.h.x, b.h.y, b.h.z),
+        Pnt3::new(b.l.x, b.l.y, b.h.z),
+        Pnt3::new(b.h.x, b.l.y, b.h.z),
+        Pnt3::new(b.l.x, b.h.y, b.h.z),
+        Pnt3::new(b.h.x, b.h.y, b.h.z),
     ];
 
     w.draw_line(&c[0], &c[1], &y);
@@ -771,7 +777,7 @@ fn parse_arguments() -> Matches {
         optflag("d", "debug", "enable debug mode"),
         optflag("", "showzorder", "show z-order curve"),
         optflag("", "showlookradius", "show look radius for each bird"),
-        optflag("", "showoctreeleaves", "show octree leaves"),
+        optopt("", "showoctree", "show octree, 0: off, 1: leaves, 2: nodes, 3: full tree", "0"),
 
         optflag("", "followfirst", "follow the first bird"),
 
@@ -782,11 +788,12 @@ fn parse_arguments() -> Matches {
         optopt("t", "threads", "number of threads to use", "4"),
         optopt("b", "boids", "number of boids to use", "100"),
         optopt("w", "weights", "five (5) comma delimited weights", "30.0,12.0,8.0,8.0,20.0"),
+        optopt("m", "mode", "0: original, 1: octree lookup, 2: barnes hut", "2"),
     ];
 
     match getopts(args.tail(), opts) {
         Ok(m) => m,
-        Err(f) => fail!(f.to_string()),
+        Err(f) => panic!(f.to_string()),
     }
 }
 
@@ -834,7 +841,7 @@ fn opt_weights(args: &Matches, opt: &str, default: [f32, ..5], expected_len: uin
     }
 
     if error {
-        result = default.to_vec(); //Vec::from_slice(default);
+        result = default.to_vec();
     }
 
     result
@@ -843,11 +850,11 @@ fn opt_weights(args: &Matches, opt: &str, default: [f32, ..5], expected_len: uin
 
 fn gen_plane_mesh() -> Rc<RefCell<Mesh>> {
     let vertices = vec!(
-        Vec3::new(0.0, 0.0, 1.0), // front / nose
-        Vec3::new(0.75, 0.0, -1.0), // left wing - 'port'
-        Vec3::new(-0.75, 0.0, -1.0), // right wing - 'starboard'
-        Vec3::new(0.0, 0.0, -1.0), // back midpoint between wings
-        Vec3::new(0.0, -0.4, -1.0), // back bottom fin
+        Pnt3::new(0.0, 0.0, 1.0), // front / nose
+        Pnt3::new(0.75, 0.0, -1.0), // left wing - 'port'
+        Pnt3::new(-0.75, 0.0, -1.0), // right wing - 'starboard'
+        Pnt3::new(0.0, 0.0, -1.0), // back midpoint between wings
+        Pnt3::new(0.0, -0.4, -1.0), // back bottom fin
         );
 
     let indices = vec!(
@@ -861,15 +868,15 @@ fn gen_plane_mesh() -> Rc<RefCell<Mesh>> {
 
 fn gen_octagon_mesh() -> Rc<RefCell<Mesh>> {
     let vertices = vec!(
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::new(1.0, 0.0, 0.0),
-        Vec3::new(0.71, 0.0, 0.71),
-        Vec3::new(0.0, 0.0, 1.0),
-        Vec3::new(-0.71, 0.0, 0.71),
-        Vec3::new(-1.0, 0.0, 0.0),
-        Vec3::new(-0.71, 0.0, -0.71),
-        Vec3::new(0.0, 0.0, -1.0),
-        Vec3::new(0.71, 0.0, -0.71),
+        Pnt3::new(0.0, 0.0, 0.0),
+        Pnt3::new(1.0, 0.0, 0.0),
+        Pnt3::new(0.71, 0.0, 0.71),
+        Pnt3::new(0.0, 0.0, 1.0),
+        Pnt3::new(-0.71, 0.0, 0.71),
+        Pnt3::new(-1.0, 0.0, 0.0),
+        Pnt3::new(-0.71, 0.0, -0.71),
+        Pnt3::new(0.0, 0.0, -1.0),
+        Pnt3::new(0.71, 0.0, -0.71),
         );
 
     let indices = vec!(
@@ -888,5 +895,5 @@ fn gen_octagon_mesh() -> Rc<RefCell<Mesh>> {
 
 fn update_scenenode(b: &Boid, node: &mut SceneNode) {
     // TODO: figure out up vector for banking
-    node.look_at_z(&b.pos, &(b.pos + b.vel), &Vec3::y());
+    node.look_at_z(b.pos.as_pnt(), (b.pos + b.vel).as_pnt(), &Vec3::y());
 }
