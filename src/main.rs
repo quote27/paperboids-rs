@@ -8,6 +8,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::rand;
 use std::sync::{Arc, RWLock};
+use std::num::Float;
+use std::fmt::{Show, Formatter, FormatError};
 use getopts::{optopt, optflag, getopts, Matches};
 use nalgebra::{Vec2, Vec3, Pnt3};
 use kiss3d::window::Window;
@@ -36,6 +38,13 @@ fn start(argc: int, argv: *const *const u8) -> int {
 // TODO: note: don't have to divide a vector by number of elements if its just going to be normalized in the end [ex: collision]
 
 struct BoidId(uint);
+
+impl Show for BoidId {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+        let BoidId(id) = *self;
+        f.write(format!("{}", id).as_bytes())
+    }
+}
 
 #[deriving(Send,Sync,Show)]
 struct Boid {
@@ -457,17 +466,17 @@ fn main() {
         for _ in range(0, threads) {
             let (tid, thread_time, acc_list) = rx.recv();
             let start_id = tid * work_size;
-            *thread_times.get_mut(tid) = thread_times[tid] + thread_time;
+            thread_times[tid] += thread_time;
 
             //update_birds_inner_t.start();
             for i in range(start_id, start_id + acc_list.len()) {
                 let mut ps = shared_ps.write();
                 {
                     //update_birds_inner2_t.start();
-                    let p = ps.get_mut(i);
+                    let p = &mut ps[i];
                     p.acc = acc_list[i - start_id];
                     p.update(dt, world_scale);
-                    update_scenenode(p, pnodes.get_mut(i));
+                    update_scenenode(p, &mut pnodes[i]);
                     //update_birds_inner2_v += update_birds_inner2_t.stop();
                 }
             }
@@ -480,7 +489,7 @@ fn main() {
         if debug {
             let ps = shared_ps.read();
             for i in range(0, num_planes) {
-                let p = (*ps)[i];
+                let p = ps[i];
                 //println!("{}: pos: {}, vel: {}", i, p.pos, p.vel);
                 if p.pos == nalgebra::zero() {
                     println!("zero position vector: id: {}", i);
@@ -765,7 +774,7 @@ fn single_interact(tc: &TraversalConst, tr: &mut TraversalRecur, o: &Octnode, dv
 
         if d2 < tc.collide_radius2 {
             tr.colliders += 1;
-            tr.r1 = tr.r1 - dv / d2;
+            tr.r1 = tr.r1 - *dv / d2;
         }
     }
 }

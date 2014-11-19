@@ -2,6 +2,7 @@ extern crate nalgebra;
 
 use utils::AABB;
 use nalgebra::Vec3;
+use std::fmt::{Show, Formatter, FormatError};
 
 use super::{Boid, BoidId};
 
@@ -13,6 +14,14 @@ impl OctnodeId {
     pub fn is_set(&self) -> bool {
         let OctnodeId(id) = *self;
         id != -1
+    }
+}
+
+impl Show for OctnodeId {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+        let OctnodeId(id) = *self;
+        let id = if id != -1 { id as int } else { -1 };
+        f.write(format!("{}", id).as_bytes())
     }
 }
 
@@ -141,7 +150,7 @@ impl Octree {
                 //TODO: verify: if state is node, there has to be at least one child, so can't have a divide by 0
                 c = c / active_children as f32;
                 v = v / active_children as f32;
-                let o = self.pool.get_mut(curr_id); // update the node's averages
+                let o = &mut self.pool[curr_id]; // update the node's averages
                 o.c = c;
                 o.v = v;
             }
@@ -160,22 +169,34 @@ impl Octree {
         let root = self.root;
         let root_aabb = self.pool[0].b;
         for i in range(0, ps.len()) {
-            self.insert_recur(root, OctnodeId(-1), ps, BoidId(i), &root_aabb);
+            // println!("inserting {}: {}", i, ps[i]);
+            self.insert_recur(root, OctnodeId(-1), ps, BoidId(i), &root_aabb, 0);
+            // self.print();
         }
     }
 
     /// Recursively insert boid to Octree.
-    fn insert_recur(&mut self, curr_oid: OctnodeId, parent_oid: OctnodeId, ps: &Vec<Boid>, boid_bid: BoidId, bbox: &AABB) -> OctnodeId {
+    fn insert_recur(&mut self, curr_oid: OctnodeId, parent_oid: OctnodeId, ps: &Vec<Boid>, boid_bid: BoidId, bbox: &AABB, recur: uint) -> OctnodeId {
+        let mut space = String::new();
+        space.grow(recur * 2, ' ');
+        // println!("{}ir: boid: {}, curr: {}, parent: {}", space, boid_bid, curr_oid, parent_oid);
+
         if !curr_oid.is_set() {
             //println!("null node, pulling from pool");
             self.pool.push(Octnode::new(parent_oid, boid_bid, *bbox, ps));
+
+            // println!("{}  : curr oid is null, adding new octnode: {}", space, OctnodeId(self.pool.len() - 1));
+
             OctnodeId(self.pool.len() - 1)
         } else {
             let OctnodeId(curr_id) = curr_oid;
 
             match self.pool[curr_id].state {
                 Empty => { // this only happens for the first insert case (root node)
-                    *self.pool.get_mut(curr_id) = Octnode::new(parent_oid, boid_bid, *bbox, ps);
+                    self.pool[curr_id] = Octnode::new(parent_oid, boid_bid, *bbox, ps);
+
+                    // println!("{}  : curr oid is empty, this is root", space);
+
                     curr_oid
                 }
                 Leaf => {
@@ -185,13 +206,26 @@ impl Octree {
                     { // convert current node to internal node, and push boid to the correct child
                         let oldboid_bid = self.pool[curr_id].boid;
                         let BoidId(oldboid_id) = oldboid_bid;
+
                         let new_oct = get_octant(&ps[oldboid_id].pos, &center);
                         let new_bounds = gen_oct_bounds(new_oct, bbox, &center);
 
                         let child_oid = self.pool[curr_id].child[new_oct];
-                        let new_child_oid = self.insert_recur(child_oid, curr_oid, ps, oldboid_bid, &new_bounds);
 
-                        let on = self.pool.get_mut(curr_id);
+                        // println!("{}  : leaf a: old boid: {}, new oct: {}, traversal child: {}", space, oldboid_bid, new_oct, child_oid);
+
+                        if bid == oldboid_id {
+                            println!("{}  : error: current boid id and old boid id match: curr: {}, old: {}", space, bid, oldboid_id);
+                            println!("\n\n");
+                            self.print();
+                            panic!("printing tree state and quitting");
+                        }
+
+                        let new_child_oid = self.insert_recur(child_oid, curr_oid, ps, oldboid_bid, &new_bounds, recur + 1);
+
+                        // println!("{}  : leaf a: new child oid: {}", space, new_child_oid);
+
+                        let on = &mut self.pool[curr_id];
                         on.child[new_oct] = new_child_oid;
                         on.boid = BoidId(-1);
                         on.state = Node;
@@ -201,9 +235,14 @@ impl Octree {
                     let new_bounds = gen_oct_bounds(oct, bbox, &center);
 
                     let child_oid = self.pool[curr_id].child[oct];
-                    let new_child_oid = self.insert_recur(child_oid, curr_oid, ps, boid_bid, &new_bounds);
 
-                    self.pool.get_mut(curr_id).child[oct] = new_child_oid;
+                    // println!("{}  : leaf b: oct: {}, traversal child: {}", space, oct, child_oid);
+
+                    let new_child_oid = self.insert_recur(child_oid, curr_oid, ps, boid_bid, &new_bounds, recur +1);
+
+                    // println!("{}  : leaf b: new child oid: {}", space, new_child_oid);
+
+                    self.pool[curr_id].child[oct] = new_child_oid;
                     curr_oid
                 }
                 Node => {
@@ -213,9 +252,14 @@ impl Octree {
                     let new_bounds = gen_oct_bounds(oct, bbox, &center); // TODO: if child exists, can skip this calc and reference child's aabb
 
                     let child_oid = self.pool[curr_id].child[oct];
-                    let new_child_oid = self.insert_recur(child_oid, curr_oid, ps, boid_bid, &new_bounds);
 
-                    self.pool.get_mut(curr_id).child[oct] = new_child_oid;
+                    // println!("{}  : node: oct: {}, traversal child: {}", space, oct, child_oid);
+
+                    let new_child_oid = self.insert_recur(child_oid, curr_oid, ps, boid_bid, &new_bounds, recur + 1);
+
+                    // println!("{}  : node: new child oid: {}", space, new_child_oid);
+
+                    self.pool[curr_id].child[oct] = new_child_oid;
                     curr_oid
                 }
             }
@@ -231,6 +275,33 @@ impl Octree {
     pub fn get_node(&self, oid: OctnodeId) -> &Octnode {
         let OctnodeId(id) = oid;
         &self.pool[id]
+    }
+
+    pub fn print(&self) {
+        println!("octree print");
+        self.print_recur(self.root, 0, 0);
+    }
+
+    fn print_recur(&self, curr_oid: OctnodeId, oct: uint, recur: uint) {
+        if !curr_oid.is_set() {
+            return;
+        }
+
+        let mut space = String::new();
+        space.grow(recur * 2, ' ');
+
+        let OctnodeId(curr_id) = curr_oid;
+        println!("{}{} {}: {} b: {}", space, oct, curr_oid,
+                 match self.pool[curr_id].state {
+                     Empty => "e",
+                     Node => "n",
+                     Leaf => "l",
+                 },
+                 self.pool[curr_id].boid);
+
+        for i in range(0, 8) {
+            self.print_recur(self.pool[curr_id].child[i], i, recur + 1);
+        }
     }
 }
 

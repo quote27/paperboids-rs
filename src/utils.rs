@@ -120,7 +120,7 @@ impl TimeMap {
     /// tm.update("a", 2.0); // {a: 3.0}
     /// ```
     pub fn update(&mut self, s: &'static str, time: f64) {
-        let t = match self.tm.find(&s) {
+        let t = match self.tm.get(&s) {
             None => time,
             Some(v) => time + *v,
         };

@@ -3,5 +3,8 @@ name = "paperboids"
 version = "0.0.0"
 authors = [ "quote <quote@lv0.io>" ]
 
+[dependencies.time]
+git = "https://github.com/rust-lang/time"
+
 [dependencies.kiss3d]
 git = "https://github.com/sebcrozet/kiss3d"
