@@ -1,29 +1,31 @@
-extern crate nalgebra;
+extern crate cgmath;
 
 use utils::AABB;
-use nalgebra::Vec3;
-use std::fmt::{Show, Formatter, FormatError};
+use self::cgmath::{Point, Point3, Vector, Vector3};
+use std::fmt;
 
 use super::{Boid, BoidId};
 
 /// Wrapper to contain boid id in main boid pool.
-pub struct OctnodeId(uint);
+pub struct OctnodeId(u32);
 
+#[deriving(Show)]
 impl OctnodeId {
-    /// Check to see if enclosed uint is not -1.  Reserving -1 to represent a null value
+    /// Check to see if enclosed u32 is not -1.  Reserving -1 to represent a null value
     pub fn is_set(&self) -> bool {
         let OctnodeId(id) = *self;
         id != -1
     }
 }
 
-impl Show for OctnodeId {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+impl fmt::String for OctnodeId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let OctnodeId(id) = *self;
-        let id = if id != -1 { id as int } else { -1 };
-        f.write(format!("{}", id).as_bytes())
+        let id = if id != -1 { id as i32 } else { -1 };
+        write!(f, "{}", id)
     }
 }
+
 
 /// Enum representing the Octnode's state.
 /// - Empty: node hasn't been initialized
@@ -38,19 +40,19 @@ pub enum OctnodeState {
 /// A node in the Octree
 pub struct Octnode {
     pub parent: OctnodeId, // TODO: not used right now
-    pub child: [OctnodeId, ..8],
+    pub child: [OctnodeId; 8],
     boid: BoidId, // TODO: convert to vector
 
     pub b: AABB,
     pub state: OctnodeState,
 
-    pub c: Vec3<f32>, // flock center
-    pub v: Vec3<f32>, // flock direction [average, but not normalized]
+    pub c: Point3<f32>, // flock center
+    pub v: Vector3<f32>, // flock direction [average, but not normalized]
 }
 
 impl Octnode {
     /// Creates an Octnode leaf with the given boid assigned to it.
-    fn new(parent: OctnodeId, boid: BoidId, bbox: AABB, ps: &Vec<Boid>) -> Octnode {
+    fn new(parent: OctnodeId, boid: BoidId, bbox: AABB, ps: &[Boid]) -> Octnode {
         let BoidId(bid) = boid; // TODO: verify: in theory this fn will not be called without a valid plane
 
         Octnode {
@@ -58,7 +60,7 @@ impl Octnode {
             child: [OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1)],
             boid: boid,
             b: bbox,
-            state: Leaf,
+            state: OctnodeState::Leaf,
             c: ps[bid].pos,
             v: ps[bid].vel,
         }
@@ -71,9 +73,9 @@ impl Octnode {
             child: [OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1), OctnodeId(-1)],
             boid: BoidId(-1),
             b: bbox,
-            state: Empty,
-            c: nalgebra::zero(),
-            v: nalgebra::zero(),
+            state: OctnodeState::Empty,
+            c: cgmath::zero(),
+            v: cgmath::zero(),
         }
     }
 
@@ -87,7 +89,7 @@ impl Octnode {
     #[inline(always)]
     pub fn is_leaf(&self) -> bool {
         match self.state {
-            Leaf => true,
+            OctnodeState::Leaf => true,
             _ => false,
         }
     }
@@ -123,12 +125,12 @@ impl Octree {
         let state = self.pool[curr_id].state;
 
         match state {
-            Empty => { }
-            Leaf => { } // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
-            Node => {
-                let mut c: Vec3<f32> = nalgebra::zero();
-                let mut v: Vec3<f32> = nalgebra::zero();
-                let mut active_children = 0u;
+            OctnodeState::Empty => { }
+            OctnodeState::Leaf => { } // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
+            OctnodeState::Node => {
+                let mut c: Vector3<f32> = cgmath::zero();
+                let mut v: Vector3<f32> = cgmath::zero();
+                let mut active_children = 0u32;
 
                 for i in range(0, 8) {
                     let child_oid = self.pool[curr_id].child[i];
@@ -137,7 +139,7 @@ impl Octree {
                         let OctnodeId(child_id) = child_oid;
 
                         match self.pool[child_id].state {
-                            Node => self.update_recur(child_oid, ps),
+                            OctnodeState::Node => self.update_recur(child_oid, ps),
                             _ => { }
                         }
 
@@ -176,7 +178,7 @@ impl Octree {
     }
 
     /// Recursively insert boid to Octree.
-    fn insert_recur(&mut self, curr_oid: OctnodeId, parent_oid: OctnodeId, ps: &Vec<Boid>, boid_bid: BoidId, bbox: &AABB, recur: uint) -> OctnodeId {
+    fn insert_recur(&mut self, curr_oid: OctnodeId, parent_oid: OctnodeId, ps: &Vec<Boid>, boid_bid: BoidId, bbox: &AABB, recur: u32) -> OctnodeId {
         let mut space = String::new();
         space.grow(recur * 2, ' ');
         // println!("{}ir: boid: {}, curr: {}, parent: {}", space, boid_bid, curr_oid, parent_oid);
@@ -192,14 +194,14 @@ impl Octree {
             let OctnodeId(curr_id) = curr_oid;
 
             match self.pool[curr_id].state {
-                Empty => { // this only happens for the first insert case (root node)
+                OctnodeState::Empty => { // this only happens for the first insert case (root node)
                     self.pool[curr_id] = Octnode::new(parent_oid, boid_bid, *bbox, ps);
 
                     // println!("{}  : curr oid is empty, this is root", space);
 
                     curr_oid
                 }
-                Leaf => {
+                OctnodeState::Leaf => {
                     let center = bbox.center();
                     let BoidId(bid) = boid_bid;
 
@@ -228,7 +230,7 @@ impl Octree {
                         let on = &mut self.pool[curr_id];
                         on.child[new_oct] = new_child_oid;
                         on.boid = BoidId(-1);
-                        on.state = Node;
+                        on.state = OctnodeState::Node;
                     }
 
                     let oct = get_octant(&ps[bid].pos, &center);
@@ -245,7 +247,7 @@ impl Octree {
                     self.pool[curr_id].child[oct] = new_child_oid;
                     curr_oid
                 }
-                Node => {
+                OctnodeState::Node => {
                     let center = bbox.center();
                     let BoidId(bid) = boid_bid;
                     let oct = get_octant(&ps[bid].pos, &center);
@@ -282,7 +284,7 @@ impl Octree {
         self.print_recur(self.root, 0, 0);
     }
 
-    fn print_recur(&self, curr_oid: OctnodeId, oct: uint, recur: uint) {
+    fn print_recur(&self, curr_oid: OctnodeId, oct: u32, recur: u32) {
         if !curr_oid.is_set() {
             return;
         }
@@ -293,9 +295,9 @@ impl Octree {
         let OctnodeId(curr_id) = curr_oid;
         println!("{}{} {}: {} b: {}", space, oct, curr_oid,
                  match self.pool[curr_id].state {
-                     Empty => "e",
-                     Node => "n",
-                     Leaf => "l",
+                     OctnodeState::Empty => "e",
+                     OctnodeState::Node => "n",
+                     OctnodeState::Leaf => "l",
                  },
                  self.pool[curr_id].boid);
 
@@ -306,7 +308,7 @@ impl Octree {
 }
 
 /// Calculate which octant the point goes to relative to center `c`
-fn get_octant(p: &Vec3<f32>, c: &Vec3<f32>) -> uint {
+fn get_octant(p: &Vector3<f32>, c: &Vector3<f32>) -> u32 {
     // TODO: make this labelling follow the same direction as morton sort
     let mut oct = 0;
 
@@ -323,18 +325,18 @@ fn get_octant(p: &Vec3<f32>, c: &Vec3<f32>) -> uint {
 }
 
 /// Generate aabb for new octant.
-fn gen_oct_bounds(oct: uint, bbox: &AABB, center: &Vec3<f32>) -> AABB {
+fn gen_oct_bounds(oct: u32, bbox: &AABB, center: &Vector3<f32>) -> AABB {
     let (lo, hi) = 
         match oct {
-            0 => { (Vec3::new(bbox.l.x, bbox.l.y, center.z), Vec3::new(center.x, center.y, bbox.h.z)) }
-            1 => { (Vec3::new(center.x, bbox.l.y, center.z), Vec3::new(bbox.h.x, center.y, bbox.h.z)) }
-            2 => { (Vec3::new(bbox.l.x, center.y, center.z), Vec3::new(center.x, bbox.h.y, bbox.h.z)) }
+            0 => { (Vector3::new(bbox.l.x, bbox.l.y, center.z), Vector3::new(center.x, center.y, bbox.h.z)) }
+            1 => { (Vector3::new(center.x, bbox.l.y, center.z), Vector3::new(bbox.h.x, center.y, bbox.h.z)) }
+            2 => { (Vector3::new(bbox.l.x, center.y, center.z), Vector3::new(center.x, bbox.h.y, bbox.h.z)) }
             3 => { (*center, bbox.h) }
             4 => { (bbox.l, *center) }
-            5 => { (Vec3::new(center.x, bbox.l.y, bbox.l.z), Vec3::new(bbox.h.x, center.y, center.z)) }
-            6 => { (Vec3::new(bbox.l.x, center.y, bbox.l.z), Vec3::new(center.x, bbox.h.y, center.z)) }
-            7 => { (Vec3::new(center.x, center.y, bbox.l.z), Vec3::new(bbox.h.x, bbox.h.y, center.z)) }
-            _ => { (nalgebra::zero(), nalgebra::zero()) } // TODO: maybe make this a fail! ?
+            5 => { (Vector3::new(center.x, bbox.l.y, bbox.l.z), Vector3::new(bbox.h.x, center.y, center.z)) }
+            6 => { (Vector3::new(bbox.l.x, center.y, bbox.l.z), Vector3::new(center.x, bbox.h.y, center.z)) }
+            7 => { (Vector3::new(center.x, center.y, bbox.l.z), Vector3::new(bbox.h.x, bbox.h.y, center.z)) }
+            _ => { (cgmath::zero(), cgmath::zero()) } // TODO: maybe make this a fail! ?
         };
     AABB::new(lo, hi)
 }

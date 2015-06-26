@@ -1,8 +1,9 @@
-extern crate time;
+extern crate clock_ticks;
+extern crate cgmath;
 
-use nalgebra::Vec3;
-use std::collections::TreeMap;
-use std::fmt::{Show, Formatter, FormatError};
+use self::cgmath::{Point, Point3, Vector, Vector3};
+use std::collections::BTreeMap;
+use std::fmt;
 
 /// A nanosecond resolution timer.  Results are returned in miliseconds.
 /// This is basically a wrapper around `time::precise_time_ns()`.
@@ -46,13 +47,13 @@ impl Timer {
     /// Starts the timer.
     #[inline(always)]
     pub fn start(&mut self) {
-        self.s = time::precise_time_ns();
+        self.s = clock_ticks::precise_time_ns();
     }
 
     /// Stops the timer and returns the elapsed time in miliseconds.
     #[inline(always)]
     pub fn stop(&mut self) -> f64 {
-        self.e = time::precise_time_ns();
+        self.e = clock_ticks::precise_time_ns();
         self.elapsedms()
     }
 
@@ -64,7 +65,7 @@ impl Timer {
 }
 
 /// A map to store a collection of timing results.  Wrapper around a
-/// TreeMap<&'static str, f64> to store <string, time> values.
+/// BTreeMap<&'static str, f64> to store <string, time> values.
 ///
 /// Used to aggregate times for named sections of code.  At the end
 /// of a run, results can be averaged and printed out.
@@ -96,15 +97,16 @@ impl Timer {
 /// tm.avg(iter);
 /// println!("{}", tm);
 /// ```
+#[derive(Show)]
 pub struct TimeMap {
-    tm: TreeMap<&'static str, f64>,
+    tm: BTreeMap<&'static str, f64>,
 }
 
 impl TimeMap {
     /// Creates an empty TimeMap.
     pub fn new() -> TimeMap {
         TimeMap {
-            tm: TreeMap::new(),
+            tm: BTreeMap::new(),
         }
     }
 
@@ -140,7 +142,7 @@ impl TimeMap {
     ///
     /// tm.avg(10); // {a: 2, b: 1}
     /// ```
-    pub fn avg(&mut self, count: uint) {
+    pub fn avg(&mut self, count: usize) {
         let count = count as f64;
         for (_, value) in self.tm.iter_mut() {
             *value /= count;
@@ -162,49 +164,53 @@ impl TimeMap {
     }
 }
 
-impl Show for TimeMap {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
-        f.write(format!("{}", self.tm).as_bytes())
+impl fmt::String for TimeMap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[");
+        for (k, v) in self.tm.iter() {
+            write!(f, "{}: {},", k, v);
+        }
+        write!(f, "]")
     }
 }
 
-/// An axis aligned bounding box.  Uses nalgebra's Vec3<f32>.
+/// An axis aligned bounding box.  Uses cgmath's Point3<f32>.
 ///
 /// ```
-/// let b = AABB::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(100.0, 100.0, 100.0));
+/// let b = AABB::new(Point3::new(0.0, 0.0, 0.0), Point3::new(100.0, 100.0, 100.0));
 ///
 /// assert_eq!(b.xlen(), 100.0);
 ///
 /// let c = b.center();
 ///
-/// assert_eq!(c, Vec3::new(50.0, 50.0, 50.0));
+/// assert_eq!(c, Point3::new(50.0, 50.0, 50.0));
 ///
 /// let mut bhalf = b.clone();
 /// bhalf.scale(0.5);
 ///
-/// assert_eq!(bhalf.l, Vec3::new(0.0, 0.0, 0.0));
-/// assert_eq!(bhalf.h, Vec3::new(50.0, 50.0, 50.0));
+/// assert_eq!(bhalf.l, Point3::new(0.0, 0.0, 0.0));
+/// assert_eq!(bhalf.h, Point3::new(50.0, 50.0, 50.0));
 ///
 /// let mut bhalf2 = b.clone();
 /// bhalf2.scale_center(0.5);
 ///
-/// assert_eq!(bhalf2.l, Vec3::new(25.0, 25.0, 25.0));
-/// assert_eq!(bhalf2.h, Vec3::new(75.0, 75.0, 75.0));
+/// assert_eq!(bhalf2.l, Point3::new(25.0, 25.0, 25.0));
+/// assert_eq!(bhalf2.h, Point3::new(75.0, 75.0, 75.0));
 ///
-/// bhalf2.trans(&Vec3::new(-1.0, 5.0, 0.0));
+/// bhalf2.trans(&Point3::new(-1.0, 5.0, 0.0));
 ///
-/// assert_eq!(bhalf2.l, Vec3::new(24.0, 30.0, 25.0));
-/// assert_eq!(bhalf2.h, Vec3::new(74.0, 80.0, 75.0));
+/// assert_eq!(bhalf2.l, Point3::new(24.0, 30.0, 25.0));
+/// assert_eq!(bhalf2.h, Point3::new(74.0, 80.0, 75.0));
 /// ```
-#[deriving(Clone)]
+#[deriving(Clone, Show)]
 pub struct AABB {
-    pub l: Vec3<f32>,
-    pub h: Vec3<f32>,
+    pub l: Point3<f32>,
+    pub h: Point3<f32>,
 }
 
 impl AABB {
     /// Creates a new axis aligned bounding box.  Doesn't check to see if low < high.
-    pub fn new(low: Vec3<f32>, high: Vec3<f32>) -> AABB {
+    pub fn new(low: Point3<f32>, high: Point3<f32>) -> AABB {
         AABB { l: low, h: high, }
     }
 
@@ -220,9 +226,9 @@ impl AABB {
     #[inline(always)]
     pub fn zlen(&self) -> f32 { self.h.z - self.l.z }
 
-    /// Returns a Vec3<f32> representing the center of the box.
-    pub fn center(&self) -> Vec3<f32> {
-        self.l + (self.h - self.l) * 0.5f32
+    /// Returns a Point3<f32> representing the center of the box.
+    pub fn center(&self) -> Point3<f32> {
+        self.l.add_v(&((self.h.sub_p(&self.l)).mul_s(0.5)))
     }
 
     /// Scales the aabb relative to the origin.
@@ -234,27 +240,30 @@ impl AABB {
 
     /// Scales the aabb relative to its center.
     pub fn scale_center(&mut self, scale: f32) {
+        self.scale(scale);
+
+        let scale = 1.0 - scale; // (1 - scale) * xl = xl - xl*scale
         let xl = self.xlen();
         let yl = self.ylen();
         let zl = self.zlen();
 
-        let diffv = Vec3::new(xl - xl * scale, yl - yl * scale, zl - zl * scale) * 0.5f32;
-
-        self.scale(scale);
+        let diffv = Vector3::new(xl, yl, zl).mul_s(scale * 0.5);
         self.trans(&diffv);
     }
 
-    /// Translate the box by the given Vec3<f32>.
+    /// Translate the box by the given Point3<f32>.
     #[inline(always)]
-    pub fn trans(&mut self, trans: &Vec3<f32>) {
-        self.h = self.h + *trans;
-        self.l = self.l + *trans;
+    pub fn trans(&mut self, trans: &Vector3<f32>) {
+        self.h = self.h.add_v(trans);
+        self.l = self.l.add_v(trans);
     }
 }
 
-impl Show for AABB {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
-        f.write(format!("[l: {}, h: {}]", self.l, self.h).as_bytes())
+impl fmt::String for AABB {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[l: ({}, {}, {}), h: ({}, {}, {})]", 
+               self.l.x, self.l.y, self.l.z,
+               self.h.x, self.h.y, self.h.z)
     }
 }
 
@@ -269,5 +278,4 @@ pub fn min(a: f32, b: f32) -> f32 {
 pub fn max(a: f32, b: f32) -> f32 {
     if a > b { a } else { b }
 }
-
 

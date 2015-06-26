@@ -3,8 +3,12 @@ name = "paperboids"
 version = "0.0.0"
 authors = [ "quote <quote@lv0.io>" ]
 
-[dependencies.time]
-git = "https://github.com/rust-lang/time"
+[[bin]]
+name = "paperboids"
+path = "src/maintest.rs"
 
-[dependencies.kiss3d]
-git = "https://github.com/sebcrozet/kiss3d"
+[dependencies.clock_ticks]
+clock_ticks = "*"
+
+[dependencies.cgmath]
+git = "https://github.com/bjz/cgmath-rs"

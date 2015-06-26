@@ -1,7 +1,7 @@
+extern crate clock_ticks;
 extern crate native;
-extern crate time;
 extern crate kiss3d;
-extern crate nalgebra;
+extern crate cgmath;
 extern crate getopts;
 
 use std::rc::Rc;
@@ -264,7 +264,7 @@ fn main() {
 
     let mut time_map = TimeMap::new();
 
-    let mut last_time = time::precise_time_ns();
+    let mut last_time = clock_ticks::precise_time_ns();
     let mut curr_time;
 
     let mut frame_count = 0u;
@@ -277,7 +277,7 @@ fn main() {
     println!("starting main loop");
     while window.render_with_camera(&mut arc_ball) {
         frame_t.start();
-        curr_time = time::precise_time_ns();
+        curr_time = clock_ticks::precise_time_ns();
 
         // ZSort start
         section_t.start();
