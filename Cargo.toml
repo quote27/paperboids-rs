@@ -1,14 +1,11 @@
 [package]
 name = "paperboids"
-version = "0.0.0"
-authors = [ "quote <quote@lv0.io>" ]
+version = "0.1.0"
+authors = ["quote <quote@dust.io>"]
 
-[[bin]]
-name = "paperboids"
-path = "src/maintest.rs"
-
-[dependencies.clock_ticks]
-clock_ticks = "*"
-
-[dependencies.cgmath]
-git = "https://github.com/bjz/cgmath-rs"
+[dependencies]
+cgmath = "*"
+glfw = "*"
+time = "*"
+gl = "*"
+image = "*"
