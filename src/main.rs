@@ -192,13 +192,23 @@ fn main() {
     override_color_u.upload_3f(1.0, 1.0, 1.0);
     alpha_u.upload_1f(1.0);
 
+    let mut rot_angle = 0.0;
+
     let t_start = precise_time_s();
+
+    let mut tframe_start = t_start;
+    let mut tframe_end;
 
     let mut pause = true;
 
     println!("starting main loop");
     while !window.should_close() {
-        let t_now = precise_time_s();
+        tframe_end = precise_time_s();
+        let t_frame = tframe_end - tframe_start;
+        tframe_start = tframe_end; // time of last frame
+
+        let t_now = precise_time_s(); // time since beginning
+
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
@@ -228,7 +238,9 @@ fn main() {
             let t_diff = t_now - t_start;
             //alpha_u.upload_1f(((t_diff * 4.0).sin() as f32 + 1.0) / 2.0);
 
-            let rot180 = Basis3::from_axis_angle(&Vector3::new(0.0, 0.0, 1.0), deg(180.0 * t_diff as f32).into());
+            rot_angle += 180.0 * t_frame as f32;
+
+            let rot180 = Basis3::from_axis_angle(&Vector3::new(0.0, 0.0, 1.0), deg(rot_angle).into());
             let model_m4 = model_m4 * Matrix4::from(*rot180.as_ref());
             model_u.upload_m4f(&model_m4);
         }
