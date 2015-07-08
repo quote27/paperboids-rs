@@ -2,46 +2,45 @@ extern crate gl;
 extern crate glfw;
 extern crate cgmath;
 extern crate time;
-extern crate image;
+extern crate rand;
 
 use time::precise_time_s;
 use gl::types::*;
 use glfw::{Action, Context, Key};
-use image::GenericImage;
 use cgmath::*;
 use std::mem;
 use std::ptr;
-use shaders::{Shader, Program, Uniform};
+use shaders::{Shader, Program};
 
 mod shaders;
 
 static VS_SRC: &'static str = "
-#version 150 core
-in vec3 position;
-in vec3 color;
+#version 330 core
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 color;
+layout (location = 2) in mat4 model_inst;
 
 out vec3 o_color;
 
-uniform mat4 model;
 uniform mat4 view;
 uniform mat4 proj;
 
 uniform vec3 override_color;
 
 void main() {
-    o_color = color * override_color;
-    gl_Position = proj * view * model * vec4(position, 1.0);
+    o_color = color;
+    gl_Position = proj * view * model_inst * vec4(position, 1.0);
 }";
 
 static FS_SRC: &'static str = "
-#version 150 core
+#version 330 core
 in vec3 o_color;
 out vec4 out_color;
 
 uniform float alpha;
 
 void main() {
-    out_color = vec4(o_color, 1.0) * alpha;
+    out_color = vec4(o_color, 1.0) * vec4(1.0, 1.0, 1.0, alpha);
 }";
 
 fn main() {
@@ -53,7 +52,7 @@ fn main() {
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
     glfw.window_hint(glfw::WindowHint::Resizable(false));
 
-    let (mut window, events) = glfw.create_window(300, 300, "open.gl tutorial", glfw::WindowMode::Windowed)
+    let (mut window, events) = glfw.create_window(300, 300, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
 
     gl::load_with(|s| window.get_proc_address(s));
@@ -99,7 +98,36 @@ fn main() {
         0, 4, 3,
     ];
 
+    let model_positions = vec![
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.3, 0.0, 0.0),
+        Vector3::new(0.0, 0.3, 0.0),
+        Vector3::new(0.0, 0.0, 0.3),
+    ];
+
+    let mut model_positions = Vec::with_capacity(1000);
+    {
+        use rand::Rng;
+        let mut rand = rand::weak_rng();
+
+        for _ in 0..1000 {
+            model_positions.push(Vector3::new(
+                    rand.next_f32() * 2.0 - 1.0,
+                    rand.next_f32() * 2.0 - 1.0,
+                    rand.next_f32() * 2.0 - 1.0,
+                    ));
+        }
+    }
+
+    let model_default_scale_mat = Matrix4::from(Matrix3::from_value(0.1));
+
+    let mut model_inst = Vec::with_capacity(model_positions.len());
+    for p in model_positions.iter() {
+        model_inst.push(Matrix4::from_translation(p) * model_default_scale_mat);
+    }
+
     /*
+    // axis [x/y/z marker]
     let vertices = [
         // vertex        // color
         0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
@@ -116,8 +144,27 @@ fn main() {
     ];
     */
 
+    /*
+    // squares
+    let vertices = [
+        // vertex        // color
+        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+    ];
+    let vertex_size = 6;
 
-    // upload data to card
+    let elements = [
+        0, 1u32,
+        1, 2,
+        2, 3,
+        3, 0,
+    ];
+    */
+
+
+
     println!("vertices: creating vertex buffer object (vbo)");
     let mut vbo = 0;
     unsafe {
@@ -127,7 +174,6 @@ fn main() {
     }
     gl_error();
 
-    // upload data to card
     println!("elements: creating vertex buffer object (ebo)");
     let mut ebo = 0;
     unsafe {
@@ -136,7 +182,6 @@ fn main() {
         gl::BufferData(gl::ELEMENT_ARRAY_BUFFER, (elements.len() * mem::size_of::<u32>()) as GLsizeiptr, mem::transmute(&elements[0]), gl::STATIC_DRAW);
     }
     gl_error();
-
 
     prog.use_prog();
 
@@ -156,7 +201,7 @@ fn main() {
     }
 
     let color_attr = prog.get_attrib("color");
-    println!("color: attribute: {}", pos_attr);
+    println!("color: attribute: {}", color_attr);
     gl_error();
 
     println!("color: setting vertex attribute pointer and enabling enabling vertex attrib array");
@@ -170,24 +215,63 @@ fn main() {
         gl_error();
     }
 
+
+    println!("instance_mat: creating vertex buffer object (ibo)");
+    let mut ibo = 0;
+    unsafe {
+        gl::GenBuffers(1, &mut ibo);
+        gl::BindBuffer(gl::ARRAY_BUFFER, ibo);
+        let model_inst_size = model_inst.len() * mem::size_of::<Matrix4<f32>>();
+        println!("model inst size: {}", model_inst_size);
+        gl::BufferData(gl::ARRAY_BUFFER, model_inst_size as GLsizeiptr, mem::transmute(&model_inst[0]), gl::STREAM_DRAW);
+
+        let model_inst_attr = prog.get_attrib("model_inst") as GLuint;
+        println!("model_inst_attr: {} {} {} {}", model_inst_attr, model_inst_attr + 1, model_inst_attr + 2, model_inst_attr + 3);
+
+        let vec4_size = mem::size_of::<Vector4<f32>>();
+        println!("vec4 size: {}", vec4_size);
+        let mat4_size = mem::size_of::<Matrix4<f32>>();
+        println!("mat4 size: {}", mat4_size);
+
+        gl::EnableVertexAttribArray(model_inst_attr);
+        gl::VertexAttribPointer(    model_inst_attr, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, ptr::null());
+        gl::EnableVertexAttribArray(model_inst_attr + 1);
+        gl::VertexAttribPointer(    model_inst_attr + 1, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, mem::transmute(vec4_size));
+        gl::EnableVertexAttribArray(model_inst_attr + 2);
+        gl::VertexAttribPointer(    model_inst_attr + 2, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, mem::transmute(2 * vec4_size));
+        gl::EnableVertexAttribArray(model_inst_attr + 3);
+        gl::VertexAttribPointer(    model_inst_attr + 3, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, mem::transmute(3 * vec4_size));
+
+        gl::VertexAttribDivisor(model_inst_attr, 1);
+        gl::VertexAttribDivisor(model_inst_attr + 1, 1);
+        gl::VertexAttribDivisor(model_inst_attr + 2, 1);
+        gl::VertexAttribDivisor(model_inst_attr + 3, 1);
+        gl_error();
+
+        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+    }
+
+
+
+
+    println!("use program");
+
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
     }
 
+    println!("setting up uniforms");
+
     let alpha_u = prog.get_unif("alpha");
     let override_color_u = prog.get_unif("override_color");
-    let model_u = prog.get_unif("model");
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 1.0, 10.0);
     let view_m4 = Matrix4::look_at(&Point3::new(2.5, 2.5, 2.0), &Point3::new(0.0, 0.0, 0.0), &Vector3::new(0.0, 1.0, 0.0));
-    let scale_m3 = Matrix3::from_value(0.1);
-    let model_m4 = Matrix4::identity() * Matrix4::from(scale_m3);
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
-    model_u.upload_m4f(&model_m4);
 
     override_color_u.upload_3f(1.0, 1.0, 1.0);
     alpha_u.upload_1f(1.0);
@@ -235,20 +319,35 @@ fn main() {
 
         if !pause {
             // update scene
-            let t_diff = t_now - t_start;
+            //let t_diff = t_now - t_start;
             //alpha_u.upload_1f(((t_diff * 4.0).sin() as f32 + 1.0) / 2.0);
 
             rot_angle += 180.0 * t_frame as f32;
 
             let rot180 = Basis3::from_axis_angle(&Vector3::new(0.0, 0.0, 1.0), deg(rot_angle).into());
-            let model_m4 = model_m4 * Matrix4::from(*rot180.as_ref());
-            model_u.upload_m4f(&model_m4);
+            let rot180_m4 = Matrix4::from(*rot180.as_ref());
+
+            model_inst.clear();
+            for p in model_positions.iter() {
+                model_inst.push(Matrix4::from_translation(p) * rot180_m4 * model_default_scale_mat);
+            }
+
+            unsafe {
+                gl::BindBuffer(gl::ARRAY_BUFFER, ibo);
+                let model_inst_size = model_inst.len() * mem::size_of::<Matrix4<f32>>();
+                gl::BufferData(gl::ARRAY_BUFFER, model_inst_size as GLsizeiptr, mem::transmute(&model_inst[0]), gl::STREAM_DRAW);
+                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            }
+
+            //let model_m4 = model_m4 * Matrix4::from(*rot180.as_ref());
+            //model_u.upload_m4f(&model_m4);
         }
 
         // draw graphics
         unsafe {
-            gl::DrawElements(gl::LINE_STRIP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null());
-            gl_error();
+            //gl::DrawElements(gl::LINE_STRIP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null());
+            gl::DrawElementsInstanced(gl::LINE_STRIP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), model_inst.len() as GLint);
+            gl_error_str("main loop: draw elements");
         }
 
         // present graphics
@@ -258,12 +357,16 @@ fn main() {
     println!("open.gl tutorial end");
 }
 
-fn handle_window_event(window: &mut glfw::Window, event: glfw::WindowEvent) {
-}
-
 fn gl_error() {
     let er = unsafe { gl::GetError() };
     if er != 0 {
         println!("gl error? {}", er);
+    }
+}
+
+fn gl_error_str(s: &str) {
+    let er = unsafe { gl::GetError() };
+    if er != 0 {
+        println!("gl error? {} - {}", er, s);
     }
 }
