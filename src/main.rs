@@ -25,8 +25,6 @@ out vec3 o_color;
 uniform mat4 view;
 uniform mat4 proj;
 
-uniform vec3 override_color;
-
 void main() {
     o_color = color;
     gl_Position = proj * view * model_inst * vec4(position, 1.0);
@@ -37,20 +35,18 @@ static FS_SRC: &'static str = "
 in vec3 o_color;
 out vec4 out_color;
 
-uniform float alpha;
-
 void main() {
-    out_color = vec4(o_color, 1.0) * vec4(1.0, 1.0, 1.0, alpha);
+    out_color = vec4(o_color, 1.0);
 }";
 
 fn main() {
-    println!("open.gl tutorial begin");
+    println!("paperboids begin");
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
-    glfw.window_hint(glfw::WindowHint::Resizable(false));
+    glfw.window_hint(glfw::WindowHint::Resizable(true));
 
     let (mut window, events) = glfw.create_window(300, 300, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
@@ -60,7 +56,6 @@ fn main() {
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
     window.make_current();
-
 
     println!("creating shaders");
     let shaders_v = vec![
@@ -73,6 +68,7 @@ fn main() {
     let prog = Program::new(&shaders_v);
     gl_error();
 
+
     println!("creating vertex array object (vao)");
     let mut vao = 0;
     unsafe {
@@ -81,7 +77,7 @@ fn main() {
     }
     gl_error();
 
-
+    // paperplane
     let vertices = [
         // vertex        // color
         0.0,  0.0,  1.0, 1.0, 1.0, 1.0f32,
@@ -98,13 +94,8 @@ fn main() {
         0, 4, 3,
     ];
 
-    let model_positions = vec![
-        Vector3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.3, 0.0, 0.0),
-        Vector3::new(0.0, 0.3, 0.0),
-        Vector3::new(0.0, 0.0, 0.3),
-    ];
 
+    // generate instances
     let mut model_positions = Vec::with_capacity(1000);
     {
         use rand::Rng;
@@ -121,6 +112,7 @@ fn main() {
 
     let model_default_scale_mat = Matrix4::from(Matrix3::from_value(0.1));
 
+    // convert positions into model matrices
     let mut model_inst = Vec::with_capacity(model_positions.len());
     for p in model_positions.iter() {
         model_inst.push(Matrix4::from_translation(p) * model_default_scale_mat);
@@ -183,6 +175,7 @@ fn main() {
     }
     gl_error();
 
+    println!("use program");
     prog.use_prog();
 
     let pos_attr = prog.get_attrib("position");
@@ -254,7 +247,6 @@ fn main() {
 
 
 
-    println!("use program");
 
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
@@ -263,7 +255,6 @@ fn main() {
     println!("setting up uniforms");
 
     let alpha_u = prog.get_unif("alpha");
-    let override_color_u = prog.get_unif("override_color");
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
@@ -273,7 +264,6 @@ fn main() {
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
 
-    override_color_u.upload_3f(1.0, 1.0, 1.0);
     alpha_u.upload_1f(1.0);
 
     let mut rot_angle = 0.0;
@@ -319,8 +309,7 @@ fn main() {
 
         if !pause {
             // update scene
-            //let t_diff = t_now - t_start;
-            //alpha_u.upload_1f(((t_diff * 4.0).sin() as f32 + 1.0) / 2.0);
+            // calculate rotation based on time, update each model matrix
 
             rot_angle += 180.0 * t_frame as f32;
 
@@ -338,23 +327,18 @@ fn main() {
                 gl::BufferData(gl::ARRAY_BUFFER, model_inst_size as GLsizeiptr, mem::transmute(&model_inst[0]), gl::STREAM_DRAW);
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
             }
-
-            //let model_m4 = model_m4 * Matrix4::from(*rot180.as_ref());
-            //model_u.upload_m4f(&model_m4);
         }
 
-        // draw graphics
+        // draw planes
         unsafe {
-            //gl::DrawElements(gl::LINE_STRIP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null());
             gl::DrawElementsInstanced(gl::LINE_STRIP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), model_inst.len() as GLint);
             gl_error_str("main loop: draw elements");
         }
 
-        // present graphics
         window.swap_buffers();
     }
 
-    println!("open.gl tutorial end");
+    println!("paperboids end");
 }
 
 fn gl_error() {
