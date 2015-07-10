@@ -4,15 +4,17 @@ extern crate cgmath;
 extern crate time;
 extern crate rand;
 
-use time::precise_time_s;
+use time::precise_time_ns;
 use gl::types::*;
 use glfw::{Action, Context, Key};
 use cgmath::*;
 use std::mem;
 use std::ptr;
 use shaders::{Shader, Program};
+use mesh::Mesh;
 
 mod shaders;
+mod mesh;
 
 static VS_SRC: &'static str = "
 #version 330 core
@@ -69,6 +71,7 @@ fn main() {
     gl_error();
 
 
+    /*
     println!("creating vertex array object (vao)");
     let mut vao = 0;
     unsafe {
@@ -76,22 +79,29 @@ fn main() {
         gl::BindVertexArray(vao);
     }
     gl_error();
+    */
 
     // paperplane
-    let vertices = [
+    let vertices = vec![
         // vertex        // color
-        0.0,  0.0,  1.0, 1.0, 1.0, 1.0f32,
-        0.75, 0.0, -1.0, 1.0, 1.0, 1.0,
-       -0.75, 0.0, -1.0, 1.0, 1.0, 1.0,
-        0.0,  0.0, -1.0, 1.0, 1.0, 1.0,
-        0.0, -0.4, -1.0, 1.0, 1.0, 1.0,
+        0.0,  0.0,  1.0, 1.0, 1.0, 1.0f32, // front / nose
+        0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // left wing / 'port'
+       -0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // right wing / 'starboard
+        0.0,  0.0, -1.0, 1.0, 1.0, 1.0,    // back midpoint between wings
+        0.0, -0.4, -1.0, 1.0, 1.0, 1.0,    // back bottom fin
     ];
     let vertex_size = 6;
 
-    let elements = [
+    // triangle
+    let elements = vec![
         0, 1, 3u32,
         0, 3, 2,
         0, 4, 3,
+    ];
+
+    let elements = vec![
+        0, 1, 2u32,
+        0, 4, 5,
     ];
 
 
@@ -101,11 +111,11 @@ fn main() {
         use rand::Rng;
         let mut rand = rand::weak_rng();
 
-        for _ in 0..1000 {
+        for _ in 0..100 {
             model_positions.push(Vector3::new(
-                    rand.next_f32() * 2.0 - 1.0,
-                    rand.next_f32() * 2.0 - 1.0,
-                    rand.next_f32() * 2.0 - 1.0,
+                    rand.next_f32() * 5.0 - 2.5,
+                    rand.next_f32() * 5.0 - 2.5,
+                    rand.next_f32() * 5.0 - 2.5,
                     ));
         }
     }
@@ -156,7 +166,19 @@ fn main() {
     */
 
 
+    println!("use program");
+    prog.use_prog();
 
+    let mut plane_mesh = Mesh::new("paperplane", vertices, elements, vertex_size);
+    let pos_attr = prog.get_attrib("position") as GLuint;
+    let color_attr = prog.get_attrib("color") as GLuint;
+    let model_inst_attr = prog.get_attrib("model_inst") as GLuint;
+
+    plane_mesh.enable_attr(pos_attr, color_attr);
+    plane_mesh.enable_instancing(model_inst_attr, &model_inst);
+
+
+    /*
     println!("vertices: creating vertex buffer object (vbo)");
     let mut vbo = 0;
     unsafe {
@@ -175,8 +197,6 @@ fn main() {
     }
     gl_error();
 
-    println!("use program");
-    prog.use_prog();
 
     let pos_attr = prog.get_attrib("position");
     println!("position: attribute: {}", pos_attr);
@@ -243,7 +263,10 @@ fn main() {
 
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
     }
+    */
 
+
+    // inlined v2
 
 
 
@@ -259,7 +282,7 @@ fn main() {
     let proj_u = prog.get_unif("proj");
 
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 1.0, 10.0);
-    let view_m4 = Matrix4::look_at(&Point3::new(2.5, 2.5, 2.0), &Point3::new(0.0, 0.0, 0.0), &Vector3::new(0.0, 1.0, 0.0));
+    let view_m4 = Matrix4::look_at(&Point3::new(5.0, 5.0, 2.0), &Point3::new(0.0, 0.0, 0.0), &Vector3::new(0.0, 1.0, 0.0));
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
@@ -268,20 +291,25 @@ fn main() {
 
     let mut rot_angle = 0.0;
 
-    let t_start = precise_time_s();
+    let t_start = precise_time_ns();
 
     let mut tframe_start = t_start;
     let mut tframe_end;
 
     let mut pause = true;
 
+    let mut frame_count = 0;
+
     println!("starting main loop");
     while !window.should_close() {
-        tframe_end = precise_time_s();
+        if frame_count == 5 {
+            break;
+        }
+        tframe_end = precise_time_ns();
         let t_frame = tframe_end - tframe_start;
         tframe_start = tframe_end; // time of last frame
 
-        let t_now = precise_time_s(); // time since beginning
+        let t_now = precise_time_ns(); // time since beginning
 
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
@@ -307,35 +335,66 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
 
+        let tsection_start = precise_time_ns();
         if !pause {
             // update scene
             // calculate rotation based on time, update each model matrix
 
-            rot_angle += 180.0 * t_frame as f32;
+            rot_angle += 180.0 * (t_frame as f32 * 1e-9);
 
             let rot180 = Basis3::from_axis_angle(&Vector3::new(0.0, 0.0, 1.0), deg(rot_angle).into());
             let rot180_m4 = Matrix4::from(*rot180.as_ref());
 
+            let shared_model = rot180_m4 * model_default_scale_mat;
+
+            let tsection_start = precise_time_ns();
             model_inst.clear();
             for p in model_positions.iter() {
-                model_inst.push(Matrix4::from_translation(p) * rot180_m4 * model_default_scale_mat);
+                model_inst.push(Matrix4::from_translation(p) * shared_model);
+            }
+            if frame_count % 10 == 0 {
+                println!("vector build: {}", (precise_time_ns() - tsection_start) as f64 * 1e-6);
             }
 
+            plane_mesh.update_instancing(&model_inst);
+
+            /*
             unsafe {
                 gl::BindBuffer(gl::ARRAY_BUFFER, ibo);
                 let model_inst_size = model_inst.len() * mem::size_of::<Matrix4<f32>>();
                 gl::BufferData(gl::ARRAY_BUFFER, model_inst_size as GLsizeiptr, mem::transmute(&model_inst[0]), gl::STREAM_DRAW);
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
             }
+            */
+        }
+        if frame_count % 10 == 0 {
+            println!("compute section: {}", (precise_time_ns() - tsection_start) as f64 * 1e-6);
         }
 
         // draw planes
+        let tsection_start = precise_time_ns();
+        /*
         unsafe {
-            gl::DrawElementsInstanced(gl::LINE_STRIP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), model_inst.len() as GLint);
+            gl::DrawElementsInstanced(gl::LINE_LOOP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), model_inst.len() as GLint);
             gl_error_str("main loop: draw elements");
+        }
+        */
+        plane_mesh.draw_instanced(model_inst.len() as GLint);
+
+        if frame_count % 10 == 0 {
+            println!("draw elements instanced: {}", (precise_time_ns() - tsection_start) as f64 * 1e-6);
+        }
+
+        if frame_count % 10 == 0 {
+            println!("internal frame before swap: {}", (precise_time_ns() - tframe_end) as f64 * 1e-6);
         }
 
         window.swap_buffers();
+        if frame_count % 10 == 0 {
+            println!("internal frame with swap: {}", (precise_time_ns() - tframe_end) as f64 * 1e-6);
+            println!("frame: {}", t_frame as f64 * 1e-6);
+        }
+        frame_count += 1;
     }
 
     println!("paperboids end");
