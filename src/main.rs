@@ -8,8 +8,6 @@ use time::precise_time_ns;
 use gl::types::*;
 use glfw::{Action, Context, Key};
 use cgmath::*;
-use std::mem;
-use std::ptr;
 use shaders::{Shader, Program};
 use mesh::Mesh;
 
@@ -70,16 +68,32 @@ fn main() {
     let prog = Program::new(&shaders_v);
     gl_error();
 
+    //
+    // meshes
+    //
+    /* // axis [x/y/z marker]
+    let vertices = [
+        // vertex        // color
+        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
+        0.0,  1.0,  0.0, 0.0, 1.0, 0.0f32,
+        0.0,  0.0,  1.0, 0.0, 0.0, 1.0f32,
+    ];
+    let vertex_size = 6;
+    let elements = [ 0u32, 1, 0, 2, 0, 3 ];
+    // */
 
-    /*
-    println!("creating vertex array object (vao)");
-    let mut vao = 0;
-    unsafe {
-        gl::GenVertexArrays(1, &mut vao);
-        gl::BindVertexArray(vao);
-    }
-    gl_error();
-    */
+    /* // squares
+    let vertices = [
+        // vertex        // color
+        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+    ];
+    let vertex_size = 6;
+    let elements = [ 0u32, 1, 1, 2, 2, 3, 3, 0 ];
+    // */
 
     // paperplane
     let vertices = vec![
@@ -94,24 +108,25 @@ fn main() {
 
     // triangle
     let elements = vec![
-        0, 1, 3u32,
+        0u32, 1, 3,
         0, 3, 2,
         0, 4, 3,
     ];
 
+    // lines
     let elements = vec![
-        0, 1, 2u32,
-        0, 4, 5,
+        0u32, 1, 2, 0, 3, 4,
     ];
 
 
-    // generate instances
-    let mut model_positions = Vec::with_capacity(1000);
+    println!("generating model instance matrices");
+    let num_inst = 1000;
+    let mut model_positions = Vec::with_capacity(num_inst);
     {
         use rand::Rng;
         let mut rand = rand::weak_rng();
 
-        for _ in 0..100 {
+        for _ in 0..num_inst {
             model_positions.push(Vector3::new(
                     rand.next_f32() * 5.0 - 2.5,
                     rand.next_f32() * 5.0 - 2.5,
@@ -128,147 +143,17 @@ fn main() {
         model_inst.push(Matrix4::from_translation(p) * model_default_scale_mat);
     }
 
-    /*
-    // axis [x/y/z marker]
-    let vertices = [
-        // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
-        0.0,  1.0,  0.0, 0.0, 1.0, 0.0f32,
-        0.0,  0.0,  1.0, 0.0, 0.0, 1.0f32,
-    ];
-    let vertex_size = 6;
-
-    let elements = [
-        0, 1u32,
-        0, 2,
-        0, 3,
-    ];
-    */
-
-    /*
-    // squares
-    let vertices = [
-        // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
-        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
-    ];
-    let vertex_size = 6;
-
-    let elements = [
-        0, 1u32,
-        1, 2,
-        2, 3,
-        3, 0,
-    ];
-    */
-
 
     println!("use program");
     prog.use_prog();
 
+    let pos_a = prog.get_attrib("position") as GLuint;
+    let color_a = prog.get_attrib("color") as GLuint;
+    let model_inst_a = prog.get_attrib("model_inst") as GLuint;
+
     let mut plane_mesh = Mesh::new("paperplane", vertices, elements, vertex_size);
-    let pos_attr = prog.get_attrib("position") as GLuint;
-    let color_attr = prog.get_attrib("color") as GLuint;
-    let model_inst_attr = prog.get_attrib("model_inst") as GLuint;
-
-    plane_mesh.enable_attr(pos_attr, color_attr);
-    plane_mesh.enable_instancing(model_inst_attr, &model_inst);
-
-
-    /*
-    println!("vertices: creating vertex buffer object (vbo)");
-    let mut vbo = 0;
-    unsafe {
-        gl::GenBuffers(1, &mut vbo);
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-        gl::BufferData(gl::ARRAY_BUFFER, (vertices.len() * mem::size_of::<f32>()) as GLsizeiptr, mem::transmute(&vertices[0]), gl::STATIC_DRAW);
-    }
-    gl_error();
-
-    println!("elements: creating vertex buffer object (ebo)");
-    let mut ebo = 0;
-    unsafe {
-        gl::GenBuffers(1, &mut ebo);
-        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
-        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER, (elements.len() * mem::size_of::<u32>()) as GLsizeiptr, mem::transmute(&elements[0]), gl::STATIC_DRAW);
-    }
-    gl_error();
-
-
-    let pos_attr = prog.get_attrib("position");
-    println!("position: attribute: {}", pos_attr);
-    gl_error();
-
-    println!("position: setting vertex attribute pointer and enabling enabling vertex attrib array");
-    unsafe {
-        let pos_attr_u = pos_attr as GLuint;
-        println!("  enable vertex attrib array");
-        gl::EnableVertexAttribArray(pos_attr_u);
-        gl_error();
-        println!("  vertex attrib pointer");
-        gl::VertexAttribPointer(pos_attr_u, 3, gl::FLOAT, gl::FALSE, (vertex_size * mem::size_of::<f32>()) as GLint, ptr::null());
-        gl_error();
-    }
-
-    let color_attr = prog.get_attrib("color");
-    println!("color: attribute: {}", color_attr);
-    gl_error();
-
-    println!("color: setting vertex attribute pointer and enabling enabling vertex attrib array");
-    unsafe {
-        let color_attr_u = color_attr as GLuint;
-        println!("  enable vertex attrib array");
-        gl::EnableVertexAttribArray(color_attr_u);
-        gl_error();
-        println!("  vertex attrib pointer");
-        gl::VertexAttribPointer(color_attr_u, 3, gl::FLOAT, gl::FALSE, (vertex_size * mem::size_of::<f32>()) as GLint, mem::transmute(3 * mem::size_of::<f32>()));
-        gl_error();
-    }
-
-
-    println!("instance_mat: creating vertex buffer object (ibo)");
-    let mut ibo = 0;
-    unsafe {
-        gl::GenBuffers(1, &mut ibo);
-        gl::BindBuffer(gl::ARRAY_BUFFER, ibo);
-        let model_inst_size = model_inst.len() * mem::size_of::<Matrix4<f32>>();
-        println!("model inst size: {}", model_inst_size);
-        gl::BufferData(gl::ARRAY_BUFFER, model_inst_size as GLsizeiptr, mem::transmute(&model_inst[0]), gl::STREAM_DRAW);
-
-        let model_inst_attr = prog.get_attrib("model_inst") as GLuint;
-        println!("model_inst_attr: {} {} {} {}", model_inst_attr, model_inst_attr + 1, model_inst_attr + 2, model_inst_attr + 3);
-
-        let vec4_size = mem::size_of::<Vector4<f32>>();
-        println!("vec4 size: {}", vec4_size);
-        let mat4_size = mem::size_of::<Matrix4<f32>>();
-        println!("mat4 size: {}", mat4_size);
-
-        gl::EnableVertexAttribArray(model_inst_attr);
-        gl::VertexAttribPointer(    model_inst_attr, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, ptr::null());
-        gl::EnableVertexAttribArray(model_inst_attr + 1);
-        gl::VertexAttribPointer(    model_inst_attr + 1, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, mem::transmute(vec4_size));
-        gl::EnableVertexAttribArray(model_inst_attr + 2);
-        gl::VertexAttribPointer(    model_inst_attr + 2, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, mem::transmute(2 * vec4_size));
-        gl::EnableVertexAttribArray(model_inst_attr + 3);
-        gl::VertexAttribPointer(    model_inst_attr + 3, 4, gl::FLOAT, gl::FALSE, mat4_size as GLint, mem::transmute(3 * vec4_size));
-
-        gl::VertexAttribDivisor(model_inst_attr, 1);
-        gl::VertexAttribDivisor(model_inst_attr + 1, 1);
-        gl::VertexAttribDivisor(model_inst_attr + 2, 1);
-        gl::VertexAttribDivisor(model_inst_attr + 3, 1);
-        gl_error();
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-    }
-    */
-
-
-    // inlined v2
-
-
+    plane_mesh.setup(pos_a, color_a, model_inst_a);
+    plane_mesh.update_inst(&model_inst);
 
 
     unsafe {
@@ -302,14 +187,11 @@ fn main() {
 
     println!("starting main loop");
     while !window.should_close() {
-        if frame_count == 5 {
-            break;
-        }
         tframe_end = precise_time_ns();
-        let t_frame = tframe_end - tframe_start;
+        let tframe = tframe_end - tframe_start;
         tframe_start = tframe_end; // time of last frame
 
-        let t_now = precise_time_ns(); // time since beginning
+        let t_now = (precise_time_ns() - t_start) as f64 * 1e-9; // time since beginning
 
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
@@ -329,7 +211,6 @@ fn main() {
             }
         }
 
-        // clear
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -337,10 +218,9 @@ fn main() {
 
         let tsection_start = precise_time_ns();
         if !pause {
-            // update scene
             // calculate rotation based on time, update each model matrix
 
-            rot_angle += 180.0 * (t_frame as f32 * 1e-9);
+            rot_angle += 180.0 * (tframe as f32 * 1e-9);
 
             let rot180 = Basis3::from_axis_angle(&Vector3::new(0.0, 0.0, 1.0), deg(rot_angle).into());
             let rot180_m4 = Matrix4::from(*rot180.as_ref());
@@ -352,47 +232,27 @@ fn main() {
             for p in model_positions.iter() {
                 model_inst.push(Matrix4::from_translation(p) * shared_model);
             }
-            if frame_count % 10 == 0 {
-                println!("vector build: {}", (precise_time_ns() - tsection_start) as f64 * 1e-6);
+            if frame_count % 60 == 0 {
+                println!("{:.2}: vector build: {}", t_now, (precise_time_ns() - tsection_start) as f64 * 1e-6);
             }
 
-            plane_mesh.update_instancing(&model_inst);
-
-            /*
-            unsafe {
-                gl::BindBuffer(gl::ARRAY_BUFFER, ibo);
-                let model_inst_size = model_inst.len() * mem::size_of::<Matrix4<f32>>();
-                gl::BufferData(gl::ARRAY_BUFFER, model_inst_size as GLsizeiptr, mem::transmute(&model_inst[0]), gl::STREAM_DRAW);
-                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-            }
-            */
+            plane_mesh.update_inst(&model_inst);
         }
-        if frame_count % 10 == 0 {
-            println!("compute section: {}", (precise_time_ns() - tsection_start) as f64 * 1e-6);
+        if frame_count % 60 == 0 {
+            println!("{:.2}: compute section: {}", t_now, (precise_time_ns() - tsection_start) as f64 * 1e-6);
         }
 
         // draw planes
         let tsection_start = precise_time_ns();
-        /*
-        unsafe {
-            gl::DrawElementsInstanced(gl::LINE_LOOP, elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), model_inst.len() as GLint);
-            gl_error_str("main loop: draw elements");
-        }
-        */
-        plane_mesh.draw_instanced(model_inst.len() as GLint);
+        plane_mesh.draw_inst(model_inst.len() as GLint);
 
-        if frame_count % 10 == 0 {
-            println!("draw elements instanced: {}", (precise_time_ns() - tsection_start) as f64 * 1e-6);
-        }
-
-        if frame_count % 10 == 0 {
-            println!("internal frame before swap: {}", (precise_time_ns() - tframe_end) as f64 * 1e-6);
+        if frame_count % 60 == 0 {
+            println!("{:.2}: draw elements instanced: {}", t_now, (precise_time_ns() - tsection_start) as f64 * 1e-6);
         }
 
         window.swap_buffers();
-        if frame_count % 10 == 0 {
-            println!("internal frame with swap: {}", (precise_time_ns() - tframe_end) as f64 * 1e-6);
-            println!("frame: {}", t_frame as f64 * 1e-6);
+        if frame_count % 60 == 0 {
+            println!("{:.2}: frame: {}", t_now, tframe as f64 * 1e-6);
         }
         frame_count += 1;
     }
