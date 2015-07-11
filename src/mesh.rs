@@ -6,9 +6,28 @@ use gl::types::*;
 use cgmath::*;
 use std::mem;
 use std::ptr;
-
 use ::gl_error_str;
 
+/// Mesh structure containing vertex and element information.
+///
+/// Has helper functions to handle opengl logic [setting up buffers
+/// and configuring instancing].
+///
+/// # Example
+///
+/// ```
+/// let vertices = gen_verts();
+/// let elements = gen_elem();
+/// let vertex_size = 6; // number of floats in the vertex
+///
+/// let mut test_mesh = Mesh::new(vertices, elements, vertex_size);
+/// test_mesh.setup(pos_a, color_a, model_inst_a); // attributes
+/// test_mesh.update_inst(&model_inst_vec); // vec of model transform matrices
+///
+/// // do stuff
+///
+/// test_mesh.draw_inst(num); // calls gl::DrawElementsInstanced
+/// ```
 pub struct Mesh {
     vao: GLuint,
     vbo: GLuint,
@@ -22,6 +41,8 @@ pub struct Mesh {
 }
 
 impl Mesh {
+    /// Generate a new mesh with the given vertices and elements.  Moves the vectors
+    /// into the struct.  Does not set up any opengl logic.
     pub fn new(name: &str, v: Vec<f32>, e: Vec<u32>, vert_size: usize) -> Mesh {
         Mesh {
             vao: 0,
@@ -35,6 +56,7 @@ impl Mesh {
         }
     }
 
+    /// Setup vertex array / buffers / attributes for the mesh.
     pub fn setup(&mut self, pos_a: GLuint, color_a: GLuint, model_inst_a: GLuint) {
         println!("mesh: {}: setup: pos_a: {}, color_a: {}, model_inst_a: {}", self.name, pos_a, color_a, model_inst_a);
 
@@ -82,10 +104,10 @@ impl Mesh {
 
             gl::BindVertexArray(0);
         }
-
         gl_error_str("mesh: setup");
     }
 
+    /// Upload new vector of model transform matrices to the instance array buffer.
     pub fn update_inst(&mut self, model_inst: &Vec<Matrix4<f32>>) {
         unsafe {
             gl::BindVertexArray(self.vao);
@@ -96,17 +118,16 @@ impl Mesh {
 
             gl::BindVertexArray(0);
         }
-
         gl_error_str("mesh: update_inst");
     }
 
+    /// Draw `num` instances of the mesh.
     pub fn draw_inst(&mut self, num: GLint) {
         unsafe {
             gl::BindVertexArray(self.vao);
             gl::DrawElementsInstanced(gl::LINE_LOOP, self.elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), num);
             gl::BindVertexArray(0);
         }
-
         gl_error_str("mesh: draw_inst");
     }
 }
