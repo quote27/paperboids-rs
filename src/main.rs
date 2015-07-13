@@ -64,61 +64,11 @@ fn main() {
         Shader::from_str(gl::VERTEX_SHADER, &VS_SRC),
         Shader::from_str(gl::FRAGMENT_SHADER, &FS_SRC),
     ];
-    gl_error();
+    gl_error_str("shaders created");
 
     println!("creating program");
     let prog = Program::new(&shaders_v);
-    gl_error();
-
-    //
-    // meshes
-    //
-    /* // axis [x/y/z marker]
-    let vertices = [
-        // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
-        0.0,  1.0,  0.0, 0.0, 1.0, 0.0f32,
-        0.0,  0.0,  1.0, 0.0, 0.0, 1.0f32,
-    ];
-    let vertex_size = 6;
-    let elements = [ 0u32, 1, 0, 2, 0, 3 ];
-    // */
-
-    /* // squares
-    let vertices = [
-        // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
-        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
-    ];
-    let vertex_size = 6;
-    let elements = [ 0u32, 1, 1, 2, 2, 3, 3, 0 ];
-    // */
-
-    // paperplane
-    let vertices = vec![
-        // vertex        // color
-        0.0,  0.0,  1.0, 1.0, 1.0, 1.0f32, // front / nose
-        0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // left wing / 'port'
-       -0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // right wing / 'starboard
-        0.0,  0.0, -1.0, 1.0, 1.0, 1.0,    // back midpoint between wings
-        0.0, -0.4, -1.0, 1.0, 1.0, 1.0,    // back bottom fin
-    ];
-    let vertex_size = 6;
-
-    // triangle
-    let elements = vec![
-        0u32, 1, 3,
-        0, 3, 2,
-        0, 4, 3,
-    ];
-
-    // lines
-    let elements = vec![
-        0u32, 1, 2, 0, 3, 4,
-    ];
+    gl_error_str("program created");
 
 
     println!("generating model instance matrices");
@@ -153,7 +103,7 @@ fn main() {
     let color_a = prog.get_attrib("color") as GLuint;
     let model_inst_a = prog.get_attrib("model_inst") as GLuint;
 
-    let mut plane_mesh = Mesh::new("paperplane", vertices, elements, vertex_size);
+    let mut plane_mesh = gen_paperplane_mesh();
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
 
@@ -288,4 +238,55 @@ fn gl_error_str(s: &str) {
     if er != 0 {
         println!("gl error? {} - {}", er, s);
     }
+}
+
+fn gen_paperplane_mesh() -> Mesh {
+    let vertices = vec![
+        // vertex        // color
+        0.0,  0.0,  1.0, 1.0, 1.0, 1.0f32, // front / nose
+        0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // left wing / 'port'
+       -0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // right wing / 'starboard
+        0.0,  0.0, -1.0, 1.0, 1.0, 1.0,    // back midpoint between wings
+        0.0, -0.4, -1.0, 1.0, 1.0, 1.0,    // back bottom fin
+    ];
+    let vertex_size = 6;
+
+    // triangles
+    // let elements = vec![
+    //     0u32, 1, 3,
+    //     0, 3, 2,
+    //     0, 4, 3,
+    // ];
+
+    // lines
+    let elements = vec![ 0u32, 1, 2, 0, 3, 4 ];
+
+    Mesh::new("paperplane", vertices, elements, vertex_size)
+}
+
+fn gen_square_mesh() -> Mesh {
+    let vertices = vec![
+        // vertex        // color
+        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+    ];
+    let vertex_size = 6;
+    let elements = vec![ 0u32, 1, 1, 2, 2, 3, 3, 0 ];
+    Mesh::new("square", vertices, elements, vertex_size)
+}
+
+fn gen_axis_mesh() -> Mesh {
+    let vertices = vec![
+        // vertex        // color
+        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
+        0.0,  1.0,  0.0, 0.0, 1.0, 0.0f32,
+        0.0,  0.0,  1.0, 0.0, 0.0, 1.0f32,
+    ];
+    let vertex_size = 6;
+    let elements = vec![ 0u32, 1, 0, 2, 0, 3 ];
+
+    Mesh::new("axis", vertices, elements, vertex_size)
 }
