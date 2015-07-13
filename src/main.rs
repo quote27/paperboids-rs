@@ -12,11 +12,13 @@ use shaders::{Shader, Program};
 use mesh::Mesh;
 use timer::{Timer, TimeMap};
 use aabb::AABB;
+use boids::Boid;
 
 mod shaders;
 mod mesh;
 mod timer;
 mod aabb;
+mod boids;
 
 static VS_SRC: &'static str = "
 #version 330 core
@@ -73,30 +75,22 @@ fn main() {
     gl_error_str("program created");
 
     let world_bounds = AABB::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(5.0, 5.0, 5.0));
-    let world_scale = 0.5;
+    let world_scale = 0.1;
 
-    println!("generating model instance matrices");
-    let num_inst = 1000;
-    let mut model_positions = Vec::with_capacity(num_inst);
-    {
-        use rand::Rng;
-        let mut rand = rand::weak_rng();
+    let num_boids = 1000;
+    println!("generating {} boids", num_boids);
 
-        for _ in 0..num_inst {
-            model_positions.push(Vector3::new(
-                    rand.next_f32() * world_bounds.xlen(),
-                    rand.next_f32() * world_bounds.ylen(),
-                    rand.next_f32() * world_bounds.zlen(),
-                    ));
-        }
+    let mut bs = Vec::with_capacity(num_boids);
+    for _ in 0..num_boids {
+        bs.push(Boid::random_new(&world_bounds))
     }
 
-    let model_default_scale_mat = Matrix4::from(Matrix3::from_value(0.1));
+    let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
 
     // convert positions into model matrices
-    let mut model_inst = Vec::with_capacity(model_positions.len());
-    for p in model_positions.iter() {
-        model_inst.push(Matrix4::from_translation(p) * model_default_scale_mat);
+    let mut model_inst = Vec::with_capacity(bs.len());
+    for b in bs.iter() {
+        model_inst.push(b.model() * model_default_scale_mat);
     }
 
 
@@ -197,8 +191,8 @@ fn main() {
 
             section_t.start();
             model_inst.clear();
-            for p in model_positions.iter() {
-                model_inst.push(Matrix4::from_translation(p) * shared_model);
+            for b in bs.iter() {
+                model_inst.push(b.model() * shared_model);
             }
             tm.update(tm_compute_vec_build, section_t.stop());
 
