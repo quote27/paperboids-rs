@@ -72,7 +72,8 @@ fn main() {
     let prog = Program::new(&shaders_v);
     gl_error_str("program created");
 
-    let world_bounds = AABB::new(Point3::new(0.0, 0.0, 0.0), Point3::new(5.0, 5.0, 5.0));
+    let world_bounds = AABB::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(5.0, 5.0, 5.0));
+    let world_scale = 0.5;
 
     println!("generating model instance matrices");
     let num_inst = 1000;
@@ -122,7 +123,7 @@ fn main() {
     let proj_u = prog.get_unif("proj");
 
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 1.0, 10.0);
-    let view_m4 = Matrix4::look_at(&Point3::new(8.0, 8.0, 0.0), &world_bounds.center(), &Vector3::new(0.0, 1.0, 0.0));
+    let view_m4 = Matrix4::look_at(&Point3::new(8.0, 8.0, 0.0), &Point3::from_vec(&world_bounds.center()), &Vector3::new(0.0, 1.0, 0.0));
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
