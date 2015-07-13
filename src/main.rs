@@ -62,6 +62,7 @@ fn main() {
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
     window.make_current();
+    //glfw.set_swap_interval(0); // set this to 0 to unlock frame rate
 
     println!("creating shaders");
     let shaders_v = vec![
@@ -75,8 +76,8 @@ fn main() {
     gl_error_str("program created");
 
     // config variables
-    let world_bounds = AABB::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(5.0, 5.0, 5.0));
-    let world_scale = 0.1;
+    let world_bounds = AABB::new(Vector3::zero(), Vector3::new(100.0, 100.0, 100.0));
+    let world_scale = 1.0;
     let look_radius = 30.0 * world_scale;
     let look_radius2 = look_radius * look_radius;
     let collide_radius = 8.0 * world_scale;
@@ -93,10 +94,10 @@ fn main() {
     let weights =  default_weights; // opt_weights(&args, "weights", default_weights, 5);
 
     let mut fly_bbox = world_bounds.clone();
-    fly_bbox.scale_center(0.8);
+    fly_bbox.scale_center(0.5);
     let fly_bbox = fly_bbox;
 
-    let num_boids = 10;
+    let num_boids = 100;
     println!("generating {} boids", num_boids);
 
     let mut bs = Vec::with_capacity(num_boids);
@@ -135,8 +136,11 @@ fn main() {
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
-    let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 1.0, 10.0);
-    let view_m4 = Matrix4::look_at(&Point3::new(8.0, 8.0, 0.0), &Point3::from_vec(&world_bounds.center()), &Vector3::new(0.0, 1.0, 0.0));
+    let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.5, 10000.0);
+
+    let eye = Point3::new(0.0, world_bounds.h.y, -world_bounds.h.z);
+    let target = Point3::from_vec(&world_bounds.center());
+    let view_m4 = Matrix4::look_at(&eye, &target, &Vector3::unit_y());
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
@@ -180,7 +184,7 @@ fn main() {
                 }
                 glfw::WindowEvent::FramebufferSize(w, h) => {
                     unsafe { gl::Viewport(0, 0, w, h); }
-                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 1.0, 10.0);
+                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.5, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
                 }
                 _ => {}
@@ -236,6 +240,14 @@ fn main() {
                     let b = &mut bs[bi];
                     b.acc = acc;
                     b.update(dt, world_scale);
+
+                    if b.pos == Vector3::zero() {
+                        println!("zero pos vector: id: {}", bi);
+                    }
+                    if !b.pos[0].is_finite() {
+                        println!("non finite pos vector: id: {}, vec: {:?}", bi,
+                                (b.pos[0], b.pos[1], b.pos[2]));
+                    }
                 }
             }
 

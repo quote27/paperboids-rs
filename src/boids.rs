@@ -51,6 +51,19 @@ impl Boid {
         // TODO: figure out 'up' vector to get bank rotation animation
         //let look_at = Basis3::look_at(&self.vel, &Vector3::unit_y());
         Matrix4::from_translation(&self.pos) //* Matrix4::from(*look_at.as_ref())
+
+        //Matrix4::look_at(&Point3::from_vec(&self.pos), &Point3::from_vec(&(self.pos + self.vel)), &Vector3::unit_y())
+
+        // copying cgmath's look_at and modifying the translation part, still not working tho
+        //let eye = &self.pos;
+        //let f = self.vel.normalize();
+        //let s = f.cross(&Vector3::unit_y()).normalize();
+        //let u = s.cross(&f);
+
+        //Matrix4::new( s.x.clone(),  u.x.clone(), -f.x.clone(), zero(),
+        //              s.y.clone(),  u.y.clone(), -f.y.clone(), zero(),
+        //              s.z.clone(),  u.z.clone(), -f.z.clone(), zero(),
+        //              eye.x.clone(), eye.y.clone(),  eye.z.clone(),  one())
     }
 }
 
