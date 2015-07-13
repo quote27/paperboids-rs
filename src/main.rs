@@ -11,10 +11,12 @@ use cgmath::*;
 use shaders::{Shader, Program};
 use mesh::Mesh;
 use timer::{Timer, TimeMap};
+use aabb::AABB;
 
 mod shaders;
 mod mesh;
 mod timer;
+mod aabb;
 
 static VS_SRC: &'static str = "
 #version 330 core
@@ -70,6 +72,7 @@ fn main() {
     let prog = Program::new(&shaders_v);
     gl_error_str("program created");
 
+    let world_bounds = AABB::new(Point3::new(0.0, 0.0, 0.0), Point3::new(5.0, 5.0, 5.0));
 
     println!("generating model instance matrices");
     let num_inst = 1000;
@@ -80,9 +83,9 @@ fn main() {
 
         for _ in 0..num_inst {
             model_positions.push(Vector3::new(
-                    rand.next_f32() * 5.0 - 2.5,
-                    rand.next_f32() * 5.0 - 2.5,
-                    rand.next_f32() * 5.0 - 2.5,
+                    rand.next_f32() * world_bounds.xlen(),
+                    rand.next_f32() * world_bounds.ylen(),
+                    rand.next_f32() * world_bounds.zlen(),
                     ));
         }
     }
@@ -119,7 +122,7 @@ fn main() {
     let proj_u = prog.get_unif("proj");
 
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 1.0, 10.0);
-    let view_m4 = Matrix4::look_at(&Point3::new(5.0, 5.0, 2.0), &Point3::new(0.0, 0.0, 0.0), &Vector3::new(0.0, 1.0, 0.0));
+    let view_m4 = Matrix4::look_at(&Point3::new(8.0, 8.0, 0.0), &world_bounds.center(), &Vector3::new(0.0, 1.0, 0.0));
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
