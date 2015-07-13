@@ -49,8 +49,8 @@ impl Boid {
 
     pub fn model(&self) -> Matrix4<f32> {
         // TODO: figure out 'up' vector to get bank rotation animation
-        let look_at = Basis3::look_at(&self.vel, &Vector3::unit_y());
-        Matrix4::from_translation(&self.pos) * Matrix4::from(*look_at.as_ref())
+        //let look_at = Basis3::look_at(&self.vel, &Vector3::unit_y());
+        Matrix4::from_translation(&self.pos) //* Matrix4::from(*look_at.as_ref())
     }
 }
 

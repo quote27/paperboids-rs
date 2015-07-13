@@ -74,10 +74,29 @@ fn main() {
     let prog = Program::new(&shaders_v);
     gl_error_str("program created");
 
+    // config variables
     let world_bounds = AABB::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(5.0, 5.0, 5.0));
     let world_scale = 0.1;
+    let look_radius = 30.0 * world_scale;
+    let look_radius2 = look_radius * look_radius;
+    let collide_radius = 8.0 * world_scale;
+    let collide_radius2 = collide_radius * collide_radius;
+    let max_mag = 100.0;
 
-    let num_boids = 1000;
+    let default_weights  = vec![
+        30.0, // avoid obstacles
+        12.0, // collision avoidance
+        8.0,  // flock centering
+        9.0,  // match velocity
+        20.0, // bounds push
+    ];
+    let weights =  default_weights; // opt_weights(&args, "weights", default_weights, 5);
+
+    let mut fly_bbox = world_bounds.clone();
+    fly_bbox.scale_center(0.8);
+    let fly_bbox = fly_bbox;
+
+    let num_boids = 10;
     println!("generating {} boids", num_boids);
 
     let mut bs = Vec::with_capacity(num_boids);
@@ -133,12 +152,11 @@ fn main() {
 
     let tm_frame = "00.frame";
     let tm_events = "01.events";
-    let tm_clear = "02.clear";
-    let tm_compute = "03.0.compute";
-    let tm_compute_shared_mat = "03.1.shared_mat";
-    let tm_compute_vec_build = "03.2.vec_build";
-    let tm_compute_update_inst = "03.3.update_inst";
-    let tm_draw_inst ="04.draw_inst";
+    let tm_compute = "02.0.compute";
+    let tm_compute_shared_mat = "02.1.shared_mat";
+    let tm_compute_vec_build = "02.2.vec_build";
+    let tm_compute_update_inst = "02.3.update_inst";
+    let tm_draw_inst ="03.draw_inst";
 
     let mut pause = true;
     let mut frame_count = 0;
@@ -170,29 +188,64 @@ fn main() {
         }
         tm.update(tm_events, section_t.stop());
 
-        section_t.start();
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
-        tm.update(tm_clear, section_t.stop());
 
         compute_t.start();
         if !pause {
             section_t.start();
-            // calculate rotation based on time, update each model matrix
-            rot_angle += 180.0 * (tlastframe as f32 * 1e-3);
+            // starting with brute force boids algorithm
 
-            let rot180 = Basis3::from_axis_angle(&Vector3::new(0.0, 0.0, 1.0), deg(rot_angle).into());
-            let rot180_m4 = Matrix4::from(*rot180.as_ref());
+            let dt = (tlastframe as f32) * 1e-3; // convert from ms to sec
 
-            let shared_model = rot180_m4 * model_default_scale_mat;
+            for bi in 0..bs.len() {
+                let mut rules: Vec<Vector3<f32>> = vec![Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero()];
+
+                {
+                    let (r1, r2, r3) = calc_rules(&bs, bi, look_radius2, collide_radius2);
+                    rules[1] = r1.mul_s(weights[1]);
+                    rules[2] = r2.mul_s(weights[2]);
+                    rules[3] = r3.mul_s(weights[3]);
+
+                    rules[4] = bounds_v(&bs[bi], &fly_bbox).mul_s(weights[4]);
+                }
+
+                let mut mag = 0.0;
+                let mut acc = Vector3::zero();
+
+                for r in rules.iter() {
+                    let m = r.length();
+
+                    // TODO: change this to epsilon
+                    if m == 0.0 { continue; }
+
+                    if mag + m > max_mag {
+                        // rebalance last rule
+                        let r = r.mul_s((max_mag - mag) / m);
+                        acc = acc + r;
+                        break;
+                    }
+
+                    mag += m;
+                    acc = acc + *r;
+                }
+
+                {
+                    let b = &mut bs[bi];
+                    b.acc = acc;
+                    b.update(dt, world_scale);
+                }
+            }
+
+
             tm.update(tm_compute_shared_mat, section_t.stop());
 
             section_t.start();
             model_inst.clear();
             for b in bs.iter() {
-                model_inst.push(b.model() * shared_model);
+                model_inst.push(b.model() * model_default_scale_mat);
             }
             tm.update(tm_compute_vec_build, section_t.stop());
 
@@ -287,4 +340,86 @@ fn gen_axis_mesh() -> Mesh {
     let elements = vec![ 0u32, 1, 0, 2, 0, 3 ];
 
     Mesh::new("axis", vertices, elements, vertex_size)
+}
+
+
+fn bounds_v(b: &Boid, bbox: &AABB) -> Vector3<f32> {
+    let mut bounds = Vector3::zero();
+
+    bounds.x =
+        if b.pos.x > bbox.h.x {
+            -1.0
+        } else if b.pos.x < bbox.l.x {
+            1.0
+        } else {
+            0.0
+        };
+
+    bounds.y =
+        if b.pos.y > bbox.h.y {
+            -1.0
+        } else if b.pos.y < bbox.l.y {
+            1.0
+        } else {
+            0.0
+        };
+
+    bounds.z =
+        if b.pos.z > bbox.h.z {
+            -1.0
+        } else if b.pos.z < bbox.l.z {
+            1.0
+        } else {
+            0.0
+        };
+
+    if bounds != Vector3::zero() {
+        bounds.normalize_self();
+    }
+    bounds
+}
+
+// returns normalized results
+fn calc_rules(bs: &Vec<Boid>, bi: usize, look_radius2: f32, collide_radius2: f32) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+    let b = &bs[bi];
+    let mut r1 = Vector3::zero();
+    let mut r2 = Vector3::zero();
+    let mut r3 = Vector3::zero();
+    let mut neighbors = 0u32;
+    let mut colliders = 0u32;
+
+    for j in 0..bs.len() {
+        if bi == j { continue; }
+
+        let o = &bs[j];
+
+        let disp = o.pos - b.pos;
+        let dist2 = disp.length2();
+
+        if dist2 < look_radius2 {
+            neighbors += 1;
+
+            // fly to center
+            r2 = r2 + o.pos;
+
+            // fly in the same direction
+            r3 = r3 + o.vel;
+
+            // avoid others
+            if dist2 < collide_radius2 {
+                colliders += 1;
+                r1 = r1 - (disp.div_s(dist2));
+            }
+        }
+    }
+
+    if neighbors > 0 {
+        r2 = r2.div_s(neighbors as f32) - b.pos;
+        r2.normalize_self();
+        r3.normalize_self();
+    }
+    if colliders > 0 {
+        r1.normalize_self();
+    }
+    (r1, r2, r3)
 }
