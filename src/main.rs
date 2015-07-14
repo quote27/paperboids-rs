@@ -1,9 +1,13 @@
+#![feature(unique)]
 extern crate gl;
 extern crate glfw;
 extern crate cgmath;
 extern crate time;
 extern crate rand;
 
+use std::thread;
+use std::sync::mpsc::{self, Sender, Receiver};
+use std::ptr::Unique;
 use time::precise_time_ns;
 use gl::types::*;
 use glfw::{Action, Context, Key};
@@ -46,6 +50,46 @@ void main() {
 }";
 
 fn main() {
+    println!("thread write test");
+    let threads = 4;
+
+    let mut a = Vec::with_capacity(threads * 4);
+    for _ in 0..(threads*4) {
+        a.push(0);
+    }
+    println!("before: {:?}", a);
+
+    // use to join threads across scope boundaries
+    let (tx, rx) = mpsc::channel();
+
+    let ap = a.as_mut_ptr();
+
+    for tid in 0..threads {
+        let range = (tid*threads)..((tid+1)*threads);
+        let thread_tx = tx.clone();
+        let thread_ap = unsafe {Unique::new(ap.clone())};
+
+        thread::spawn(move || {
+            for r in range {
+                unsafe {
+                let pi = thread_ap.offset(r as isize);
+                *pi = *pi + 1;
+                }
+            }
+            println!("{}", tid);
+            thread_tx.send(0u32).unwrap();
+        });
+    }
+
+    for _ in 0..threads {
+        rx.recv();
+    }
+
+    println!("after: {:?}", a);
+
+    return;
+
+
     println!("paperboids begin");
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -232,7 +276,6 @@ fn main() {
         compute_t.start();
         if !pause {
             section_t.start();
-            // starting with brute force boids algorithm
 
             let dt = (tlastframe as f32) * 1e-3; // convert from ms to sec
 
