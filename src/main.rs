@@ -143,10 +143,14 @@ fn main() {
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
+    let mut view_angle = deg(0.0);
+    let mut view_angle_update = false;
+    let view_angle_rot = Basis3::from_angle_y(view_angle.into());
+
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.01, 1000.0);
     let eye = Point3::new(world_bounds.h.x * 0.2, world_bounds.h.y * 1.5, -world_bounds.h.z * 1.5);
     let target = Point3::from_vec(&world_bounds.center());
-    let view_m4 = Matrix4::look_at(&eye, &target, &Vector3::unit_y());
+    let mut view_m4 = Matrix4::look_at(&view_angle_rot.rotate_point(&eye), &target, &Vector3::unit_y());
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
@@ -192,8 +196,31 @@ fn main() {
                     proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
                 }
+                glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
+                    view_angle = view_angle + deg(20.0);
+                    view_angle_update = true;
+                }
+                glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, _) => {
+                    view_angle = view_angle + deg(20.0);
+                    view_angle_update = true;
+                }
+                glfw::WindowEvent::Key(Key::Right, _, Action::Press, _) => {
+                    view_angle = view_angle - deg(20.0);
+                    view_angle_update = true;
+                }
+                glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, _) => {
+                    view_angle = view_angle - deg(20.0);
+                    view_angle_update = true;
+                }
                 _ => {}
             }
+        }
+
+        if view_angle_update {
+            view_angle_update = false;
+            let view_angle_rot = Basis3::from_angle_y(view_angle.into());
+            view_m4 = Matrix4::look_at(&view_angle_rot.rotate_point(&eye), &target, &Vector3::unit_y());
+            view_u.upload_m4f(&view_m4);
         }
         tm.update(tm_events, section_t.stop());
 
