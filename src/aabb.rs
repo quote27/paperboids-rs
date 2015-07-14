@@ -77,7 +77,7 @@ impl AABB {
         let yl = self.ylen();
         let zl = self.zlen();
 
-        let diffv = Vector3::new(xl, yl, zl).mul_s(scale * 0.5);
+        let diffv = Vector3::new(xl, yl, zl).mul_s(scale);
         self.trans(&diffv);
     }
 

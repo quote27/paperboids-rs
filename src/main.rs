@@ -125,6 +125,25 @@ fn main() {
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
 
+    println!("world: {}", world_bounds);
+    println!("fly: {}", fly_bbox);
+
+    let mut cube_model_inst = vec![
+        {
+            Matrix4::from_translation(&world_bounds.center()) *
+                Matrix4::from(Matrix3::from_value(world_bounds.xlen()))
+        },
+        {
+            Matrix4::from_translation(&fly_bbox.center()) *
+                Matrix4::from(Matrix3::from_value(fly_bbox.xlen()))
+        },
+    ];
+
+    println!("world: {:?}", cube_model_inst[0]);
+    println!("fly: {:?}", cube_model_inst[1]);
+    let mut cube_mesh = gen_cube_mesh();
+    cube_mesh.setup(pos_a, color_a, model_inst_a);
+    cube_mesh.update_inst(&cube_model_inst);
 
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
@@ -136,9 +155,9 @@ fn main() {
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
-    let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.5, 10000.0);
+    let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.01, 1000.0);
 
-    let eye = Point3::new(0.0, world_bounds.h.y, -world_bounds.h.z);
+    let eye = Point3::new(world_bounds.h.x * 0.2, world_bounds.h.y * 1.5, -world_bounds.h.z * 1.5);
     let target = Point3::from_vec(&world_bounds.center());
     let view_m4 = Matrix4::look_at(&eye, &target, &Vector3::unit_y());
 
@@ -184,7 +203,7 @@ fn main() {
                 }
                 glfw::WindowEvent::FramebufferSize(w, h) => {
                     unsafe { gl::Viewport(0, 0, w, h); }
-                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.5, 1000.0);
+                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
                 }
                 _ => {}
@@ -272,6 +291,8 @@ fn main() {
         plane_mesh.draw_inst(model_inst.len() as GLint);
         tm.update(tm_draw_inst, section_t.stop());
 
+        cube_mesh.draw_inst(cube_model_inst.len() as GLint);
+
         window.swap_buffers();
         frame_count += 1;
         tm.update(tm_frame, frame_t.stop());
@@ -352,6 +373,64 @@ fn gen_axis_mesh() -> Mesh {
     let elements = vec![ 0u32, 1, 0, 2, 0, 3 ];
 
     Mesh::new("axis", vertices, elements, vertex_size)
+}
+
+fn gen_cube_mesh() -> Mesh {
+    let vertices = vec![
+        // vertex        // color
+       -0.5, -0.5, -0.5, 1.0, 1.0, 1.0f32,
+        0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+       -0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+
+       -0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+        0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+
+       -0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+
+        0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+
+       -0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+        0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
+
+       -0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+        0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
+       -0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+    ];
+    let vertex_size = 6;
+    let elements = vec![
+        0u32, 1, 2, 3, 4, 5,
+        6, 7, 8, 9, 10, 11,
+        12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23,
+        24, 25, 26, 27, 28, 29,
+        30, 31, 32, 33, 34, 35,
+    ];
+
+    Mesh::new("cube", vertices, elements, vertex_size)
 }
 
 

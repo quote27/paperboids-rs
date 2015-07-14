@@ -33,7 +33,7 @@ impl Boid {
     pub fn update(&mut self, dt: f32, world_scale: f32) {
         // TODO: figure out where to put these speed constants
         let max_speed = 25.0 * world_scale;
-        let min_speed = 10.0 * world_scale;
+        let min_speed = 4.0 * world_scale;
 
         self.vel = self.vel + self.acc.mul_s(dt);
 
