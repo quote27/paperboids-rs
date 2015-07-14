@@ -61,7 +61,7 @@ impl AABB {
         self.l + (self.h - self.l).mul_s(0.5)
     }
 
-    /// Scales the aabb relative to the origin.
+    /// Scales the aabb relative to the lower point.
     pub fn scale(&mut self, scale: f32) {
         self.h.x = self.l.x + self.xlen() * scale;
         self.h.y = self.l.y + self.ylen() * scale;

@@ -64,18 +64,8 @@ fn main() {
     window.make_current();
     //glfw.set_swap_interval(0); // set this to 0 to unlock frame rate
 
-    println!("creating shaders");
-    let shaders_v = vec![
-        Shader::from_str(gl::VERTEX_SHADER, &VS_SRC),
-        Shader::from_str(gl::FRAGMENT_SHADER, &FS_SRC),
-    ];
-    gl_error_str("shaders created");
-
-    println!("creating program");
-    let prog = Program::new(&shaders_v);
-    gl_error_str("program created");
-
     // config variables
+    let threads = 4;
     let world_bounds = AABB::new(Vector3::zero(), Vector3::new(100.0, 100.0, 100.0));
     let world_scale = 1.0;
     let look_radius = 30.0 * world_scale;
@@ -83,6 +73,7 @@ fn main() {
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
+    let num_boids = 100;
 
     let default_weights  = vec![
         30.0, // avoid obstacles
@@ -97,73 +88,68 @@ fn main() {
     fly_bbox.scale_center(0.5);
     let fly_bbox = fly_bbox;
 
-    let num_boids = 100;
-    println!("generating {} boids", num_boids);
+    unsafe {
+        gl::Enable(gl::DEPTH_TEST);
+    }
 
+    println!("creating shaders");
+    let shaders_v = vec![
+        Shader::from_str(gl::VERTEX_SHADER, &VS_SRC),
+        Shader::from_str(gl::FRAGMENT_SHADER, &FS_SRC),
+    ];
+    gl_error_str("shaders created");
+
+    println!("creating program");
+    let prog = Program::new(&shaders_v);
+    gl_error_str("program created");
+
+
+    println!("use program");
+    prog.use_prog();
+    let pos_a = prog.get_attrib("position") as GLuint;
+    let color_a = prog.get_attrib("color") as GLuint;
+    let model_inst_a = prog.get_attrib("model_inst") as GLuint;
+
+
+    println!("setting up models");
+    let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
+
+    println!("generating {} boids", num_boids);
     let mut bs = Vec::with_capacity(num_boids);
     for _ in 0..num_boids {
         bs.push(Boid::random_new(&world_bounds))
     }
 
-    let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
-
-    // convert positions into model matrices
     let mut model_inst = Vec::with_capacity(bs.len());
     for b in bs.iter() {
         model_inst.push(b.model() * model_default_scale_mat);
     }
-
-
-    println!("use program");
-    prog.use_prog();
-
-    let pos_a = prog.get_attrib("position") as GLuint;
-    let color_a = prog.get_attrib("color") as GLuint;
-    let model_inst_a = prog.get_attrib("model_inst") as GLuint;
-
     let mut plane_mesh = gen_paperplane_mesh();
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
 
-    println!("world: {}", world_bounds);
-    println!("fly: {}", fly_bbox);
-
     let mut cube_model_inst = vec![
-        {
-            Matrix4::from_translation(&world_bounds.center()) *
-                Matrix4::from(Matrix3::from_value(world_bounds.xlen()))
-        },
-        {
-            Matrix4::from_translation(&fly_bbox.center()) *
-                Matrix4::from(Matrix3::from_value(fly_bbox.xlen()))
-        },
+        Matrix4::from_translation(&world_bounds.center()) *
+            Matrix4::from(Matrix3::from_value(world_bounds.xlen())),
+        Matrix4::from_translation(&fly_bbox.center()) *
+            Matrix4::from(Matrix3::from_value(fly_bbox.xlen())),
     ];
-
-    println!("world: {:?}", cube_model_inst[0]);
-    println!("fly: {:?}", cube_model_inst[1]);
     let mut cube_mesh = gen_cube_mesh();
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
-    unsafe {
-        gl::Enable(gl::DEPTH_TEST);
-    }
-
     println!("setting up uniforms");
-
     let alpha_u = prog.get_unif("alpha");
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.01, 1000.0);
-
     let eye = Point3::new(world_bounds.h.x * 0.2, world_bounds.h.y * 1.5, -world_bounds.h.z * 1.5);
     let target = Point3::from_vec(&world_bounds.center());
     let view_m4 = Matrix4::look_at(&eye, &target, &Vector3::unit_y());
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
-
     alpha_u.upload_1f(1.0);
 
     println!("setting up timers");
