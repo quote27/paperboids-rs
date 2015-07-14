@@ -1,4 +1,5 @@
 #![feature(unique)]
+#![allow(mutable_transmutes)]
 extern crate gl;
 extern crate glfw;
 extern crate cgmath;
@@ -7,7 +8,9 @@ extern crate rand;
 
 use std::thread;
 use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::Arc;
 use std::ptr::Unique;
+use std::mem;
 use time::precise_time_ns;
 use gl::types::*;
 use glfw::{Action, Context, Key};
@@ -50,46 +53,6 @@ void main() {
 }";
 
 fn main() {
-    println!("thread write test");
-    let threads = 4;
-
-    let mut a = Vec::with_capacity(threads * 4);
-    for _ in 0..(threads*4) {
-        a.push(0);
-    }
-    println!("before: {:?}", a);
-
-    // use to join threads across scope boundaries
-    let (tx, rx) = mpsc::channel();
-
-    let ap = a.as_mut_ptr();
-
-    for tid in 0..threads {
-        let range = (tid*threads)..((tid+1)*threads);
-        let thread_tx = tx.clone();
-        let thread_ap = unsafe {Unique::new(ap.clone())};
-
-        thread::spawn(move || {
-            for r in range {
-                unsafe {
-                let pi = thread_ap.offset(r as isize);
-                *pi = *pi + 1;
-                }
-            }
-            println!("{}", tid);
-            thread_tx.send(0u32).unwrap();
-        });
-    }
-
-    for _ in 0..threads {
-        rx.recv();
-    }
-
-    println!("after: {:?}", a);
-
-    return;
-
-
     println!("paperboids begin");
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -117,7 +80,8 @@ fn main() {
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
-    let num_boids = 100;
+    let num_boids = 640;
+    let work_size = num_boids / threads;
 
     let default_weights  = vec![
         30.0, // avoid obstacles
@@ -126,7 +90,8 @@ fn main() {
         9.0,  // match velocity
         20.0, // bounds push
     ];
-    let weights =  default_weights; // opt_weights(&args, "weights", default_weights, 5);
+    let weights = default_weights; // opt_weights(&args, "weights", default_weights, 5);
+    let shared_weights = Arc::new(weights);
 
     let mut fly_bbox = world_bounds.clone();
     fly_bbox.scale_center(0.5);
@@ -171,6 +136,8 @@ fn main() {
     let mut plane_mesh = gen_paperplane_mesh();
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
+
+    let shared_bs = Arc::new(bs);
 
     let mut cube_model_inst = vec![
         Matrix4::from_translation(&world_bounds.center()) *
@@ -279,60 +246,79 @@ fn main() {
 
             let dt = (tlastframe as f32) * 1e-3; // convert from ms to sec
 
-            for bi in 0..bs.len() {
-                let mut rules: Vec<Vector3<f32>> = vec![Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero()];
+            let (tx, rx) = mpsc::channel();
+            for tid in 0..threads {
+                let thread_tx = tx.clone();
+                let thread_weights = shared_weights.clone();
+                let thread_bs = shared_bs.clone();
 
-                {
-                    let (r1, r2, r3) = calc_rules(&bs, bi, look_radius2, collide_radius2);
-                    rules[1] = r1.mul_s(weights[1]);
-                    rules[2] = r2.mul_s(weights[2]);
-                    rules[3] = r3.mul_s(weights[3]);
+                thread::spawn(move || {
+                    let bs = thread_bs; // use .offset()
+                    let weights = thread_weights;
 
-                    rules[4] = bounds_v(&bs[bi], &fly_bbox).mul_s(weights[4]);
-                }
+                    let start_id = tid * work_size;
+                    let work_size =
+                        if tid == threads - 1 {
+                            work_size + num_boids % threads
+                        } else {
+                            work_size
+                        };
 
-                let mut mag = 0.0;
-                let mut acc = Vector3::zero();
+                    let mut rules = vec![Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero()];
+                    for i in start_id..(start_id + work_size) {
+                        rules[0] = Vector3::zero();
 
-                for r in rules.iter() {
-                    let m = r.length();
+                        {
+                            let (r1, r2, r3) = calc_rules(&bs, i, look_radius2, collide_radius2);
+                            rules[1] = r1.mul_s(weights[1]);
+                            rules[2] = r2.mul_s(weights[2]);
+                            rules[3] = r3.mul_s(weights[3]);
 
-                    // TODO: change this to epsilon
-                    if m == 0.0 { continue; }
+                            rules[4] = bounds_v(&bs[i], &fly_bbox).mul_s(weights[4]);
+                        }
 
-                    if mag + m > max_mag {
-                        // rebalance last rule
-                        let r = r.mul_s((max_mag - mag) / m);
-                        acc = acc + r;
-                        break;
+                        let mut mag = 0.0;
+                        let mut acc = Vector3::zero();
+
+                        for r in rules.iter() {
+                            let m = r.length();
+
+                            // TODO: change this to epsilon
+                            if m == 0.0 { continue; }
+
+                            if mag + m > max_mag {
+                                // rebalance last rule
+                                let r = r.mul_s((max_mag - mag) / m);
+                                acc = acc + r;
+                                break;
+                            }
+
+                            mag += m;
+                            acc = acc + *r;
+                        }
+
+                        unsafe {
+                            let b = &bs[i];
+                            let b: &mut Boid = mem::transmute(b);
+                            b.acc = acc;
+                            b.update(dt, world_scale);
+                        }
                     }
 
-                    mag += m;
-                    acc = acc + *r;
-                }
-
-                {
-                    let b = &mut bs[bi];
-                    b.acc = acc;
-                    b.update(dt, world_scale);
-
-                    if b.pos == Vector3::zero() {
-                        println!("zero pos vector: id: {}", bi);
-                    }
-                    if !b.pos[0].is_finite() {
-                        println!("non finite pos vector: id: {}, vec: {:?}", bi,
-                                (b.pos[0], b.pos[1], b.pos[2]));
-                    }
-                }
+                    thread_tx.send(0u32);
+                });
             }
 
+            for _ in 0..threads {
+                rx.recv();
+            }
 
             tm.update(tm_compute_shared_mat, section_t.stop());
 
             section_t.start();
             model_inst.clear();
-            for b in bs.iter() {
-                model_inst.push(b.model() * model_default_scale_mat);
+            for i in 0..shared_bs.len() {
+                model_inst.push(shared_bs[i].model() * model_default_scale_mat);
             }
             tm.update(tm_compute_vec_build, section_t.stop());
 
@@ -340,6 +326,7 @@ fn main() {
             plane_mesh.update_inst(&model_inst);
             tm.update(tm_compute_update_inst, section_t.stop());
         }
+
         tm.update(tm_compute, compute_t.stop());
 
         // draw planes

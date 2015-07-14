@@ -31,7 +31,7 @@ use std::fmt;
 /// assert_eq!(bhalf2.l, Vector3::new(24.0, 30.0, 25.0));
 /// assert_eq!(bhalf2.h, Vector3::new(74.0, 80.0, 75.0));
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct AABB {
     pub l: Vector3<f32>,
     pub h: Vector3<f32>,
