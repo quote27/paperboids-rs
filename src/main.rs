@@ -20,12 +20,14 @@ use mesh::Mesh;
 use timer::{Timer, TimeMap};
 use aabb::AABB;
 use boids::Boid;
+use octree::{Octree, Octnode};
 
 mod shaders;
 mod mesh;
 mod timer;
 mod aabb;
 mod boids;
+mod octree;
 
 // todo list
 // TODO: migrate octree build and lookup
