@@ -138,6 +138,7 @@ fn main() {
     plane_mesh.update_inst(&model_inst);
 
     let shared_bs = Arc::new(bs);
+    let shared_model_inst = Arc::new(model_inst);
 
     let mut cube_model_inst = vec![
         Matrix4::from_translation(&world_bounds.center()) *
@@ -208,19 +209,19 @@ fn main() {
                     proj_u.upload_m4f(&proj_m4);
                 }
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
-                    view_angle = view_angle + deg(20.0);
+                    view_angle = view_angle + deg(40.0);
                     view_angle_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, _) => {
-                    view_angle = view_angle + deg(20.0);
+                    view_angle = view_angle + deg(40.0);
                     view_angle_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Press, _) => {
-                    view_angle = view_angle - deg(20.0);
+                    view_angle = view_angle - deg(40.0);
                     view_angle_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, _) => {
-                    view_angle = view_angle - deg(20.0);
+                    view_angle = view_angle - deg(40.0);
                     view_angle_update = true;
                 }
                 _ => {}
@@ -251,10 +252,12 @@ fn main() {
                 let thread_tx = tx.clone();
                 let thread_weights = shared_weights.clone();
                 let thread_bs = shared_bs.clone();
+                let thread_model_inst = shared_model_inst.clone();
 
                 thread::spawn(move || {
-                    let bs = thread_bs; // use .offset()
+                    let bs = thread_bs;
                     let weights = thread_weights;
+                    let model_inst = thread_model_inst;
 
                     let start_id = tid * work_size;
                     let work_size =
@@ -297,11 +300,11 @@ fn main() {
                             acc = acc + *r;
                         }
 
+                        // i know this is hacky, but can't think of another way right now =\
                         unsafe {
                             let b = &bs[i];
                             let b: &mut Boid = mem::transmute(b);
                             b.acc = acc;
-                            b.update(dt, world_scale);
                         }
                     }
 
@@ -315,15 +318,46 @@ fn main() {
 
             tm.update(tm_compute_shared_mat, section_t.stop());
 
-            section_t.start();
-            model_inst.clear();
-            for i in 0..shared_bs.len() {
-                model_inst.push(shared_bs[i].model() * model_default_scale_mat);
+            for tid in 0..threads {
+                let thread_tx = tx.clone();
+                let thread_bs = shared_bs.clone();
+                let thread_model_inst = shared_model_inst.clone();
+
+                thread::spawn(move || {
+                    let bs = thread_bs;
+                    let model_inst = thread_model_inst;
+
+                    let start_id = tid * work_size;
+                    let work_size =
+                        if tid == threads - 1 {
+                            work_size + num_boids % threads
+                        } else {
+                            work_size
+                        };
+
+                    for i in start_id..(start_id + work_size) {
+                        unsafe {
+                            let b = &bs[i];
+                            let b: &mut Boid = mem::transmute(b);
+                            b.update(dt, world_scale);
+
+                            let m = &model_inst[i];
+                            let m: &mut Matrix4<f32> = mem::transmute(m);
+                            *m = b.model() * model_default_scale_mat;
+                        }
+                    }
+
+                    thread_tx.send(0u32);
+                });
             }
-            tm.update(tm_compute_vec_build, section_t.stop());
+
+            for _ in 0..threads {
+                rx.recv();
+            }
+
 
             section_t.start();
-            plane_mesh.update_inst(&model_inst);
+            plane_mesh.update_inst(&shared_model_inst);
             tm.update(tm_compute_update_inst, section_t.stop());
         }
 
@@ -331,7 +365,7 @@ fn main() {
 
         // draw planes
         section_t.start();
-        plane_mesh.draw_inst(model_inst.len() as GLint);
+        plane_mesh.draw_inst(shared_model_inst.len() as GLint);
         tm.update(tm_draw_inst, section_t.stop());
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
