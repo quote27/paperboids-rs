@@ -27,6 +27,13 @@ mod timer;
 mod aabb;
 mod boids;
 
+// todo list
+// TODO: migrate octree build and lookup
+// TODO: add command line options
+// TODO: debug - draw aabb for octree
+// TODO: draw axis
+// TODO: figure out why birds seem to be moving faster than before
+
 static VS_SRC: &'static str = "
 #version 330 core
 layout (location = 0) in vec3 position;
