@@ -1,4 +1,3 @@
-#![feature(unique)]
 #![feature(negate_unsigned)]
 #![allow(mutable_transmutes)]
 extern crate gl;
@@ -8,11 +7,9 @@ extern crate time;
 extern crate rand;
 
 use std::thread;
-use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::mpsc;
 use std::sync::Arc;
-use std::ptr::Unique;
 use std::mem;
-use time::precise_time_ns;
 use gl::types::*;
 use glfw::{Action, Context, Key};
 use cgmath::*;
@@ -148,12 +145,12 @@ fn main() {
     plane_mesh.update_inst(&model_inst);
 
     println!("setting up octree");
-    let mut octree = Octree::new(world_bounds);
-    let shared_octree = Arc::new(octree);
+    let octree = Octree::new(world_bounds);
 
     println!("setting up arc wrappers for: bs, model_inst, octree");
     let shared_bs = Arc::new(bs);
     let shared_model_inst = Arc::new(model_inst);
+    let shared_octree = Arc::new(octree);
 
     let cube_model_inst = vec![
         Matrix4::from_translation(&world_bounds.center()) *
@@ -193,14 +190,14 @@ fn main() {
     let tm_frame = "00.frame";
     let tm_events = "01.events";
     let tm_compute = "02.0.compute";
-    let tm_compute_shared_mat = "02.1.shared_mat";
-    let tm_compute_vec_build = "02.2.vec_build";
-    let tm_compute_update_inst = "02.3.update_inst";
+    let tm_compute_octree_build = "02.1.octree_build";
+    let tm_compute_rules = "02.2.rules";
+    let tm_compute_update = "02.3.update";
+    let tm_compute_update_inst = "02.4.update_inst";
     let tm_draw_inst ="03.draw_inst";
 
     let mut pause = true;
     let mut frame_count = 0;
-    let mut rot_angle = 0.0;
 
     frame_t.start();
     println!("starting main loop");
@@ -276,7 +273,9 @@ fn main() {
 
                 // TODO: add octree debug drawing using cubes
             }
+            tm.update(tm_compute_octree_build, section_t.stop());
 
+            section_t.start();
             // simulation run step
             let (tx, rx) = mpsc::channel();
             for tid in 0..threads {
@@ -344,9 +343,9 @@ fn main() {
             for _ in 0..threads {
                 rx.recv();
             }
+            tm.update(tm_compute_rules, section_t.stop());
 
-            tm.update(tm_compute_shared_mat, section_t.stop());
-
+            section_t.start();
             for tid in 0..threads {
                 let thread_tx = tx.clone();
                 let thread_bs = shared_bs.clone();
@@ -383,6 +382,7 @@ fn main() {
             for _ in 0..threads {
                 rx.recv();
             }
+            tm.update(tm_compute_update, section_t.stop());
 
 
             section_t.start();

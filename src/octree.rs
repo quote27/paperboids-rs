@@ -1,7 +1,6 @@
 extern crate cgmath;
 
-use std::fmt;
-use cgmath::{Point, Point3, Vector, Vector3};
+use cgmath::{Vector, Vector3};
 use aabb::AABB;
 use boids::Boid;
 
