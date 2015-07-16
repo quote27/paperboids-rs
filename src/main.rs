@@ -282,9 +282,11 @@ fn main() {
                 let thread_tx = tx.clone();
                 let thread_weights = shared_weights.clone();
                 let thread_bs = shared_bs.clone();
+                let thread_octree = shared_octree.clone();
 
                 thread::spawn(move || {
                     let bs = thread_bs;
+                    let octree = thread_octree;
                     let weights = thread_weights;
 
                     let start_id = tid * work_size;
@@ -300,7 +302,8 @@ fn main() {
                         rules[0] = Vector3::zero();
 
                         {
-                            let (r1, r2, r3) = calc_rules(&bs, i, look_radius2, collide_radius2);
+                            //let (r1, r2, r3) = calc_rules(&bs, i, look_radius2, collide_radius2);
+                            let (r1, r2, r3) = calc_rules_octree(&bs, i, &*octree, look_radius, look_radius2, collide_radius2);
                             rules[1] = r1.mul_s(weights[1]);
                             rules[2] = r2.mul_s(weights[2]);
                             rules[3] = r3.mul_s(weights[3]);
@@ -576,6 +579,10 @@ fn bounds_v(b: &Boid, bbox: &AABB) -> Vector3<f32> {
     bounds
 }
 
+//
+// Original algorithm
+//
+
 // returns normalized results
 fn calc_rules(bs: &Vec<Boid>, bi: usize, look_radius2: f32, collide_radius2: f32) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
     let b = &bs[bi];
@@ -619,4 +626,110 @@ fn calc_rules(bs: &Vec<Boid>, bi: usize, look_radius2: f32, collide_radius2: f32
         r1.normalize_self();
     }
     (r1, r2, r3)
+}
+
+//
+// Barnes-hut version
+//
+
+struct TraversalConst<'b, 'c> {
+    b: &'b Boid,
+    octree: &'c Octree,
+    look_radius: f32,
+    look_radius2: f32,
+    collide_radius2: f32,
+    theta: f32,
+}
+
+struct TraversalRecur {
+    r1: Vector3<f32>,
+    r2: Vector3<f32>,
+    r3: Vector3<f32>,
+    neighbors: usize,
+    colliders: usize,
+    leaves: usize,
+    nodes: usize,
+    small_nodes: usize,
+}
+
+fn calc_rules_octree(bs: &Vec<Boid>, boid_id: usize, octree: &Octree, look_radius: f32, look_radius2: f32, collide_radius2: f32) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+    let b = &bs[boid_id];
+    let tc = TraversalConst {
+        b: b,
+        octree: octree,
+        look_radius: look_radius,
+        look_radius2: look_radius2,
+        collide_radius2: collide_radius2,
+        theta: 1.0, // TODO: figure out this value
+    };
+
+    let mut tr = TraversalRecur {
+        r1: Vector3::zero(),
+        r2: Vector3::zero(),
+        r3: Vector3::zero(),
+        neighbors: 0,
+        colliders: 0,
+        leaves: 0,
+        nodes: 0,
+        small_nodes: 0,
+    };
+
+    if tc.octree.root != -1 as usize {
+        traverse_octree(&tc, &mut tr, tc.octree.root);
+    }
+
+    if tr.neighbors > 0 {
+        tr.r2 = (tr.r2.div_s(tr.neighbors as f32) - b.pos).normalize();
+        tr.r3.normalize_self();
+    }
+    if tr.colliders > 0 {
+        tr.r1.normalize_self();
+    }
+
+    //println!("leaves: {}, nodes: {}, small node: {}", tr.leaves, tr.nodes, tr.small_nodes);
+    (tr.r1, tr.r2, tr.r3)
+}
+
+fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: usize) {
+    let o = tc.octree.get_node(curr);
+    let dv = o.c - tc.b.pos;
+    let d = dv.length();
+
+    if o.is_leaf() {
+        if d < 1e-6 { return } // skip self
+
+        single_interact(tc, tr, o, &dv, d);
+        tr.leaves += 1;
+    } else if d / o.width() >= tc.theta {
+        // close enough, use averages
+        single_interact(tc, tr, o, &dv, d);
+        tr.nodes += 1;
+    } else if o.width() < tc.look_radius / 4.0 {
+        // arbitrary value, but if the box is inside the look radius, don't merge down
+        single_interact(tc, tr, o, &dv, d);
+        tr.small_nodes += 1;
+    } else {
+        for i in 0..8 {
+            let child_id = o.child[i];
+            if child_id != -1 as usize {
+                traverse_octree(tc, tr, child_id);
+            }
+        }
+    }
+}
+
+fn single_interact(tc: &TraversalConst, tr: &mut TraversalRecur, o: &Octnode, dv: &Vector3<f32>, d: f32) {
+    let d2 = d*d;
+
+    if d2 < tc.look_radius2 {
+        tr.neighbors += 1;
+
+        tr.r2 = tr.r2 + o.c;
+        tr.r3 = tr.r3 + o.v;
+
+        if d2 < tc.collide_radius2 {
+            tr.colliders += 1;
+            tr.r1 = tr.r1 - dv.div_s(d2);
+        }
+    }
 }
