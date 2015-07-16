@@ -87,7 +87,7 @@ fn main() {
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
-    let num_boids = 640;
+    let num_boids = 1;
     let work_size = num_boids / threads;
 
     let default_weights  = vec![
@@ -128,7 +128,7 @@ fn main() {
 
 
     println!("setting up models");
-    let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
+    let model_default_scale_mat = Matrix4::identity(); // Matrix4::from(Matrix3::from_value(world_scale));
 
     println!("generating {} boids", num_boids);
     let mut bs = Vec::with_capacity(num_boids);
@@ -152,6 +152,7 @@ fn main() {
     let shared_model_inst = Arc::new(model_inst);
     let shared_octree = Arc::new(octree);
 
+    // other models
     let cube_model_inst = vec![
         Matrix4::from_translation(&world_bounds.center()) *
             Matrix4::from(Matrix3::from_value(world_bounds.xlen())),
@@ -161,6 +162,14 @@ fn main() {
     let mut cube_mesh = gen_cube_mesh();
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
+
+    let axis_model_inst = vec![
+        Matrix4::from_translation(&world_bounds.center()) *
+            Matrix4::from(Matrix3::from_value(10.0)),
+    ];
+    let mut axis_mesh = gen_axis_mesh();
+    axis_mesh.setup(pos_a, color_a, model_inst_a);
+    axis_mesh.update_inst(&axis_model_inst);
 
     println!("setting up uniforms");
     let alpha_u = prog.get_unif("alpha");
@@ -173,6 +182,7 @@ fn main() {
 
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.01, 1000.0);
     let eye = Point3::new(world_bounds.h.x * 0.2, world_bounds.h.y * 1.5, -world_bounds.h.z * 1.5);
+    let eye = Point3::new(-50.0, 100.0, 0.0);
     let target = Point3::from_vec(&world_bounds.center());
     let mut view_m4 = Matrix4::look_at(&view_angle_rot.rotate_point(&eye), &target, &Vector3::unit_y());
 
@@ -221,19 +231,19 @@ fn main() {
                     proj_u.upload_m4f(&proj_m4);
                 }
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
-                    view_angle = view_angle + deg(40.0);
+                    view_angle = view_angle + deg(180.0);
                     view_angle_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, _) => {
-                    view_angle = view_angle + deg(40.0);
+                    view_angle = view_angle + deg(180.0);
                     view_angle_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Press, _) => {
-                    view_angle = view_angle - deg(40.0);
+                    view_angle = view_angle - deg(180.0);
                     view_angle_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, _) => {
-                    view_angle = view_angle - deg(40.0);
+                    view_angle = view_angle - deg(180.0);
                     view_angle_update = true;
                 }
                 _ => {}
@@ -401,6 +411,7 @@ fn main() {
         tm.update(tm_draw_inst, section_t.stop());
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
+        axis_mesh.draw_inst(axis_model_inst.len() as GLint);
 
         window.swap_buffers();
         frame_count += 1;
@@ -434,6 +445,8 @@ fn gl_error_str(s: &str) {
 }
 
 fn gen_paperplane_mesh() -> Mesh {
+    // z+ is front
+    // y+ is top
     let vertices = vec![
         // vertex        // color
         0.0,  0.0,  1.0, 1.0, 1.0, 1.0f32, // front / nose
@@ -473,13 +486,15 @@ fn gen_square_mesh() -> Mesh {
 fn gen_axis_mesh() -> Mesh {
     let vertices = vec![
         // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        0.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
         1.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
+        0.0,  0.0,  0.0, 0.0, 1.0, 0.0f32,
         0.0,  1.0,  0.0, 0.0, 1.0, 0.0f32,
+        0.0,  0.0,  0.0, 0.0, 0.0, 1.0f32,
         0.0,  0.0,  1.0, 0.0, 0.0, 1.0f32,
     ];
     let vertex_size = 6;
-    let elements = vec![ 0u32, 1, 0, 2, 0, 3 ];
+    let elements = vec![ 0u32, 1, 2, 3, 4, 5 ];
 
     Mesh::new("axis", vertices, elements, vertex_size)
 }

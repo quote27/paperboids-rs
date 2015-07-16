@@ -112,10 +112,6 @@ impl Octree {
                     let child_id = self.pool[curr_id].child[i];
 
                     if child_id != -1 as usize {
-                        //if self.pool[child_id].state == OctnodeState::Node {
-                        //    self.update_recur(child_id, bs);
-                        //}
-
                         let child_state = self.pool[child_id].state;
                         match child_state {
                             OctnodeState::Node => self.update_recur(child_id, bs),
