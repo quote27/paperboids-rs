@@ -164,8 +164,11 @@ fn main() {
     cube_mesh.update_inst(&cube_model_inst);
 
     let axis_model_inst = vec![
-        Matrix4::from_translation(&world_bounds.center()) *
-            Matrix4::from(Matrix3::from_value(10.0)),
+        //Matrix4::from_translation(&world_bounds.center()) *
+        //Matrix4::from_translation(&Vector3::new(-0.5, 0.0, -0.5)) *
+        //    Matrix4::from(Matrix3::from_value(1.0)),
+        Matrix4::from_translation(&Vector3::new(0.0, 0.0, 0.0)) *
+            Matrix4::from(Matrix3::from_value(1.0)),
     ];
     let mut axis_mesh = gen_axis_mesh();
     axis_mesh.setup(pos_a, color_a, model_inst_a);
@@ -176,15 +179,16 @@ fn main() {
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
-    let mut view_angle = deg(0.0);
+    let mut view_angle = deg(0.0f32);
     let mut view_angle_update = false;
     let view_angle_rot = Basis3::from_angle_y(view_angle.into());
 
     let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.01, 1000.0);
     let eye = Point3::new(world_bounds.h.x * 0.2, world_bounds.h.y * 1.5, -world_bounds.h.z * 1.5);
-    let eye = Point3::new(-50.0, 100.0, 0.0);
+    let eye = Point3::new(4.0, 1.0, 4.0);
     let target = Point3::from_vec(&world_bounds.center());
-    let mut view_m4 = Matrix4::look_at(&view_angle_rot.rotate_point(&eye), &target, &Vector3::unit_y());
+    let target = Point3::new(0.5, 0.5, 0.5);
+    let mut view_m4 = Matrix4::look_at(&eye, &target, &Vector3::unit_y());
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
@@ -252,8 +256,17 @@ fn main() {
 
         if view_angle_update {
             view_angle_update = false;
-            let view_angle_rot = Basis3::from_angle_y(view_angle.into());
-            view_m4 = Matrix4::look_at(&view_angle_rot.rotate_point(&eye), &target, &Vector3::unit_y());
+
+            let target2d = Vector2::new(target.x, target.z);
+            let eye2d = Vector2::new(eye.x, eye.z);
+            let dir = eye2d - target2d;
+
+            let rot2d: Basis2<f32> = Rotation2::from_angle(view_angle.into());
+            let new_dir = rot2d.rotate_vector(&dir);
+
+            let new_eye2d = target2d + new_dir;
+            let new_eye3d = Point3::new(new_eye2d.x, eye.y, new_eye2d.y);
+            view_m4 = Matrix4::look_at(&new_eye3d, &target, &Vector3::unit_y());
             view_u.upload_m4f(&view_m4);
         }
         tm.update(tm_events, section_t.stop());
@@ -410,7 +423,7 @@ fn main() {
         plane_mesh.draw_inst(shared_model_inst.len() as GLint);
         tm.update(tm_draw_inst, section_t.stop());
 
-        cube_mesh.draw_inst(cube_model_inst.len() as GLint);
+        //cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
 
         window.swap_buffers();
