@@ -1,4 +1,5 @@
 #![feature(unique)]
+#![feature(negate_unsigned)]
 #![allow(mutable_transmutes)]
 extern crate gl;
 extern crate glfw;

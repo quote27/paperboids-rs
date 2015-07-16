@@ -10,6 +10,7 @@ use boids::Boid;
 /// - Empty: node hasn't been initialized
 /// - Left: node contains a boid
 /// - Node: node is an internal node
+#[derive(Clone, Copy)]
 pub enum OctnodeState {
     Empty, // the root node is the only one that's ever empty [this is before the tree gets built]
     Leaf,
@@ -18,9 +19,9 @@ pub enum OctnodeState {
 
 /// A node in the Octree
 pub struct Octnode {
-    pub parent: u32, // TODO: not used right now
-    pub child: [u32; 8],
-    pub boid: u32, // TODO: convert to vector
+    pub parent: usize, // TODO: not used right now
+    pub child: [usize; 8],
+    pub boid: usize, // TODO: convert to vector
 
     pub bbox: AABB,
     pub state: OctnodeState,
@@ -31,10 +32,10 @@ pub struct Octnode {
 
 impl Octnode {
     /// Creates an Octnode leaf with the given boid assigned to it.
-    fn new(parent: u32, bbox: AABB, boid_id: u32, b: &Boid) -> Octnode {
+    fn new(parent: usize, bbox: AABB, boid_id: usize, b: &Boid) -> Octnode {
         Octnode {
             parent: parent,
-            child: [-1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32],
+            child: [-1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize],
             boid: boid_id,
             bbox: bbox,
             state: OctnodeState::Leaf,
@@ -46,9 +47,9 @@ impl Octnode {
     /// Creates an empty node with a bounding box - this is used to initialize the root of a blank tree.
     fn empty(bbox: AABB) -> Octnode {
         Octnode {
-            parent: -1 as u32,
-            child: [-1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32, -1 as u32],
-            boid: -1 as u32,
+            parent: -1 as usize,
+            child: [-1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize],
+            boid: -1 as usize,
             bbox: bbox,
             state: OctnodeState::Empty,
             c: cgmath::zero(),
@@ -74,7 +75,7 @@ impl Octnode {
 
 /// Octree data structure.  Uses a Vec<Octnode> as a memory pool to contain node data.
 pub struct Octree {
-    pub root: u32,
+    pub root: usize,
     pub pool: Vec<Octnode>,
 }
 
@@ -97,7 +98,7 @@ impl Octree {
     }
 
     /// Recursive Barnes-Hut update function.
-    fn update_recur(&mut self, curr_id: u32, bs: &Vec<Boid>) {
+    fn update_recur(&mut self, curr_id: usize, bs: &Vec<Boid>) {
         let state = self.pool[curr_id].state;
 
         match state {
@@ -111,13 +112,18 @@ impl Octree {
                 for i in 0..8 {
                     let child_id = self.pool[curr_id].child[i];
 
-                    if child_id != -1 {
-                        match self.pool[child_id].state {
+                    if child_id != -1 as usize {
+                        //if self.pool[child_id].state == OctnodeState::Node {
+                        //    self.update_recur(child_id, bs);
+                        //}
+
+                        let child_state = self.pool[child_id].state;
+                        match child_state {
                             OctnodeState::Node => self.update_recur(child_id, bs),
                             _ => { }
                         }
 
-                        let o = self.pool[child_id];
+                        let o = &self.pool[child_id];
                         c = c + o.c;
                         v = v + o.v;
                         active_children += 1;
@@ -146,19 +152,19 @@ impl Octree {
         let root_bbox = self.pool[0].bbox;
         for i in 0..bs.len() {
             // println!("inserting {}: {}", i, bs[i]);
-            self.insert_recur(root, -1, bs, i, &root_bbox, 0);
+            self.insert_recur(root, -1 as usize, bs, i, &root_bbox, 0);
         }
     }
 
     /// Recursively insert boid to Octree.
-    fn insert_recur(&mut self, curr_id: u32, parent_id: u32, bs: &Vec<Boid>, boid_id: u32, bbox: &AABB, recur: u32) -> u32 {
-        let mut space = String::new();
-        space.grow(recur * 2, ' ');
+    fn insert_recur(&mut self, curr_id: usize, parent_id: usize, bs: &Vec<Boid>, boid_id: usize, bbox: &AABB, recur: usize) -> usize {
+        let mut space = String::with_capacity(2 * recur);
+        for _ in 0..recur { space.push_str("  "); }
         // println!("{}ir: boid: {}, curr: {}, parent: {}", space, boid_id, curr_id, parent_id);
 
-        if curr_id == -1 as u32 {
+        if curr_id == -1 as usize {
             //println!("null node, pulling from pool");
-            self.pool.push(Octnode::new(parent_id, boid_id, *bbox, &bs[boid_id]));
+            self.pool.push(Octnode::new(parent_id, *bbox, boid_id, &bs[boid_id]));
 
             // println!("{}  : curr oid is null, adding new octnode: {}", space, i32(self.pool.len() - 1));
             self.pool.len() - 1
@@ -166,7 +172,7 @@ impl Octree {
         } else {
             match self.pool[curr_id].state {
                 OctnodeState::Empty => { // this only happens for the first insert case (root node)
-                    self.pool[curr_id] = Octnode::new(parent_id, boid_id, *bbox, &bs[boid_id]);
+                    self.pool[curr_id] = Octnode::new(parent_id, *bbox, boid_id, &bs[boid_id]);
 
                     // println!("{}  : curr id is empty, this is root", space);
                     curr_id
@@ -241,7 +247,7 @@ impl Octree {
     }
 
     /// Return a reference to the Octnode object at index `id`.
-    pub fn get_node(&self, id: u32) -> &Octnode {
+    pub fn get_node(&self, id: usize) -> &Octnode {
         &self.pool[id]
     }
 
@@ -250,13 +256,13 @@ impl Octree {
         self.print_recur(self.root, 0, 0);
     }
 
-    fn print_recur(&self, curr_id: u32, oct: u32, recur: u32) {
-        if curr_id == -1 as u32 {
+    fn print_recur(&self, curr_id: usize, oct: usize, recur: usize) {
+        if curr_id == -1 as usize {
             return;
         }
 
-        let mut space = String::new();
-        space.grow(recur * 2, ' ');
+        let mut space = String::with_capacity(2 * recur);
+        for _ in 0..recur { space.push_str("  "); }
 
         println!("{}{} {}: {} b: {}", space, oct, curr_id,
                  match self.pool[curr_id].state {
@@ -273,7 +279,7 @@ impl Octree {
 }
 
 /// Calculate which octant the point goes to relative to center `c`
-fn get_octant(p: &Vector3<f32>, c: &Vector3<f32>) -> u32 {
+fn get_octant(p: &Vector3<f32>, c: &Vector3<f32>) -> usize {
     // TODO: make this labelling follow the same direction as morton sort
     let mut oct = 0;
 
@@ -290,7 +296,7 @@ fn get_octant(p: &Vector3<f32>, c: &Vector3<f32>) -> u32 {
 }
 
 /// Generate aabb for new octant.
-fn gen_oct_bounds(oct: u32, bbox: &AABB, center: &Vector3<f32>) -> AABB {
+fn gen_oct_bounds(oct: usize, bbox: &AABB, center: &Vector3<f32>) -> AABB {
     let (lo, hi) =
         match oct {
             0 => { (Vector3::new(bbox.l.x, bbox.l.y, center.z), Vector3::new(center.x, center.y, bbox.h.z)) }
