@@ -49,7 +49,7 @@ impl Boid {
 
     pub fn model(&self) -> Matrix4<f32> {
         // TODO: figure out 'up' vector to get bank rotation animation
-        //Matrix4::from_translation(&self.pos)
+        Matrix4::from_translation(&self.pos)
 
         // using Matrix4::look_at
         // this is buggy - position is off - seems to orbit the origin
@@ -60,14 +60,22 @@ impl Boid {
 
         // using Matrix3::look_at with Matrix4::from_translation
         // almost works... position seems right, but rotation is weird
-        let dir = self.vel;
-        let dir = Vector3::new(-1.0, -1.0, 1.0);
-        let up = Vector3::unit_y();
-        let m = Matrix4::from_translation(&self.pos) * Matrix4::from(Matrix3::look_at(&dir, &up));
+        // let dir = self.vel;
+        // let dir = Vector3::new(-1.0, -1.0, 1.0);
+        // let dir = -Vector3::unit_x();
+        // let dir = Vector3::new(-self.vel.x, -self.vel.y, self.vel.z);
+        // let up = Vector3::unit_y();
+        // let m = Matrix4::from_translation(&self.pos) * Matrix4::from(Matrix3::look_at(&dir, &up));
 
         //println!("dir: {:?}, up: {:?}, m: {:?}", dir, up, m);
+        // m
 
-        m
+        // notes
+        // this works if there is no y component
+        // - dunno why i have to negate the 'x' direction
+        // let dir = Vector3::new(-self.vel.x, 0.0f32, self.vel.z);
+        // let up = Vector3::unit_y();
+        // let m = Matrix4::from_translation(&self.pos) * Matrix4::from(Matrix3::look_at(&dir, &up));
 
 
 

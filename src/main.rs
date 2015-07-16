@@ -63,12 +63,14 @@ fn main() {
     println!("paperboids begin");
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
+    let (_width, _height) = (300, 300);
+
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
     glfw.window_hint(glfw::WindowHint::Resizable(true));
 
-    let (mut window, events) = glfw.create_window(300, 300, "paperboids", glfw::WindowMode::Windowed)
+    let (mut window, events) = glfw.create_window(_width, _height, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
 
     gl::load_with(|s| window.get_proc_address(s));
@@ -80,7 +82,7 @@ fn main() {
 
     // config variables
     let threads = 4;
-    let world_bounds = AABB::new(Vector3::zero(), Vector3::new(100.0, 100.0, 100.0));
+    let world_bounds = AABB::new(Vector3::zero(), Vector3::new(10.0, 10.0, 10.0));
     let world_scale = 1.0;
     let look_radius = 30.0 * world_scale;
     let look_radius2 = look_radius * look_radius;
@@ -133,7 +135,7 @@ fn main() {
     println!("generating {} boids", num_boids);
     let mut bs = Vec::with_capacity(num_boids);
     for _ in 0..num_boids {
-        bs.push(Boid::random_new(&world_bounds))
+        bs.push(Boid::random_new(&fly_bbox))
     }
 
     let mut model_inst = Vec::with_capacity(bs.len());
@@ -166,7 +168,7 @@ fn main() {
     let axis_model_inst = vec![
         //Matrix4::from_translation(&world_bounds.center()) *
         Matrix4::from_translation(&Vector3::new(0.5, 0.5, 0.5)) *
-            Matrix4::from(Matrix3::from_value(10.0)),
+            Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
     ];
     let mut axis_mesh = gen_axis_mesh();
     axis_mesh.setup(pos_a, color_a, model_inst_a);
@@ -177,10 +179,11 @@ fn main() {
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
-    let mut view_angle = deg(0.0f32);
-    let mut view_angle_update = true;
+    let mut horiz_view_angle = deg(0.0f32);
+    let mut vert_view_height = world_bounds.h.y * 1.5;
+    let mut view_update = true;
 
-    let mut proj_m4 = perspective(deg(45.0), 800.0 / 600.0, 0.01, 1000.0);
+    let mut proj_m4 = perspective(deg(45.0), _width as f32 / _height as f32, 0.01, 1000.0);
     let eye = Point3::new(world_bounds.h.x * 2.0, world_bounds.h.y * 1.5, world_bounds.h.z * 2.0);
     let target = Point3::from_vec(&world_bounds.center());
     let mut view_m4 = Matrix4::look_at(&eye, &target, &Vector3::unit_y());
@@ -229,38 +232,57 @@ fn main() {
                     proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
                 }
+
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
-                    view_angle = view_angle + deg(180.0);
-                    view_angle_update = true;
+                    horiz_view_angle = horiz_view_angle + deg(180.0);
+                    view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, _) => {
-                    view_angle = view_angle + deg(180.0);
-                    view_angle_update = true;
+                    horiz_view_angle = horiz_view_angle + deg(180.0);
+                    view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Press, _) => {
-                    view_angle = view_angle - deg(180.0);
-                    view_angle_update = true;
+                    horiz_view_angle = horiz_view_angle - deg(180.0);
+                    view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, _) => {
-                    view_angle = view_angle - deg(180.0);
-                    view_angle_update = true;
+                    horiz_view_angle = horiz_view_angle - deg(180.0);
+                    view_update = true;
                 }
+
+                glfw::WindowEvent::Key(Key::Up, _, Action::Press, _) => {
+                    vert_view_height = vert_view_height + 0.5;
+                    view_update = true;
+                }
+                glfw::WindowEvent::Key(Key::Up, _, Action::Repeat, _) => {
+                    vert_view_height = vert_view_height + 0.5;
+                    view_update = true;
+                }
+                glfw::WindowEvent::Key(Key::Down, _, Action::Press, _) => {
+                    vert_view_height = vert_view_height - 0.5;
+                    view_update = true;
+                }
+                glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
+                    vert_view_height = vert_view_height - 0.5;
+                    view_update = true;
+                }
+
                 _ => {}
             }
         }
 
-        if view_angle_update {
-            view_angle_update = false;
+        if view_update {
+            view_update = false;
 
             let target2d = Vector2::new(target.x, target.z);
             let eye2d = Vector2::new(eye.x, eye.z);
             let dir = eye2d - target2d;
 
-            let rot2d: Basis2<f32> = Rotation2::from_angle(view_angle.into());
+            let rot2d: Basis2<f32> = Rotation2::from_angle(horiz_view_angle.into());
             let new_dir = rot2d.rotate_vector(&dir);
 
             let new_eye2d = target2d + new_dir;
-            let new_eye3d = Point3::new(new_eye2d.x, eye.y, new_eye2d.y);
+            let new_eye3d = Point3::new(new_eye2d.x, vert_view_height, new_eye2d.y);
             view_m4 = Matrix4::look_at(&new_eye3d, &target, &Vector3::unit_y());
             view_u.upload_m4f(&view_m4);
         }
