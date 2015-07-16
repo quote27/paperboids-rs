@@ -147,10 +147,15 @@ fn main() {
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
 
+    println!("setting up octree");
+    let mut octree = Octree::new(world_bounds);
+    let shared_octree = Arc::new(octree);
+
+    println!("setting up arc wrappers for: bs, model_inst, octree");
     let shared_bs = Arc::new(bs);
     let shared_model_inst = Arc::new(model_inst);
 
-    let mut cube_model_inst = vec![
+    let cube_model_inst = vec![
         Matrix4::from_translation(&world_bounds.center()) *
             Matrix4::from(Matrix3::from_value(world_bounds.xlen())),
         Matrix4::from_translation(&fly_bbox.center()) *
@@ -254,20 +259,34 @@ fn main() {
         compute_t.start();
         if !pause {
             section_t.start();
-
             let dt = (tlastframe as f32) * 1e-3; // convert from ms to sec
 
+            // octree build step
+            {
+                // TODO: need to figure out a non-hack for read/write here
+                // I could use a RWLock like before, but that won't help when
+                // it comes to parallel builds
+                let octree: &mut Octree = unsafe { mem::transmute(&*shared_octree) };
+                octree.reset(world_bounds);
+
+                let bs = shared_bs.clone(); // just need read access
+
+                octree.insert(&*bs);
+                octree.update(&*bs);
+
+                // TODO: add octree debug drawing using cubes
+            }
+
+            // simulation run step
             let (tx, rx) = mpsc::channel();
             for tid in 0..threads {
                 let thread_tx = tx.clone();
                 let thread_weights = shared_weights.clone();
                 let thread_bs = shared_bs.clone();
-                let thread_model_inst = shared_model_inst.clone();
 
                 thread::spawn(move || {
                     let bs = thread_bs;
                     let weights = thread_weights;
-                    let model_inst = thread_model_inst;
 
                     let start_id = tid * work_size;
                     let work_size =
