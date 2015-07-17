@@ -140,7 +140,7 @@ fn main() {
 
     let mut model_inst = Vec::with_capacity(bs.len());
     for b in bs.iter() {
-        model_inst.push(b.model() * model_default_scale_mat);
+        model_inst.push(b.model(0) * model_default_scale_mat);
     }
     let mut plane_mesh = gen_paperplane_mesh();
     plane_mesh.setup(pos_a, color_a, model_inst_a);
@@ -208,6 +208,7 @@ fn main() {
     let tm_compute_update_inst = "02.4.update_inst";
     let tm_draw_inst ="03.draw_inst";
 
+    let mut model_mode = 0;
     let mut pause = true;
     let mut frame_count = 0;
 
@@ -265,6 +266,19 @@ fn main() {
                 glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
                     vert_view_height = vert_view_height - 0.5;
                     view_update = true;
+                }
+
+                glfw::WindowEvent::Key(Key::Num0, _, Action::Press, _) => {
+                    model_mode = 0;
+                }
+                glfw::WindowEvent::Key(Key::Num1, _, Action::Press, _) => {
+                    model_mode = 1;
+                }
+                glfw::WindowEvent::Key(Key::Num1, _, Action::Press, _) => {
+                    model_mode = 2;
+                }
+                glfw::WindowEvent::Key(Key::Num1, _, Action::Press, _) => {
+                    model_mode = 3;
                 }
 
                 _ => {}
@@ -414,7 +428,7 @@ fn main() {
 
                             let m = &model_inst[i];
                             let m: &mut Matrix4<f32> = mem::transmute(m);
-                            *m = b.model() * model_default_scale_mat;
+                            *m = b.model(model_mode) * model_default_scale_mat;
                         }
                     }
 
