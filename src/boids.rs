@@ -79,38 +79,31 @@ impl Boid {
 
             3 => {
                 // using Matrix3::look_at with Matrix4::from_translation
-                // almost works... position seems right, but rotation is weird
-                let dir = self.vel;
-                let dir = Vector3::new(-1.0, -1.0, 1.0);
-                //let dir = -Vector3::unit_x();
-                let dir = Vector3::new(-self.vel.x, -self.vel.y, self.vel.z);
+                // works when the y velocity component is 0
+                let dir = Vector3::new(-self.vel.x, self.vel.y, self.vel.z);
+                let dir = Vector3::new(-self.vel.x, 0.0, self.vel.z);
                 let up = Vector3::unit_y();
                 let mut m = Matrix4::from(Matrix3::look_at(&dir, &up));
-                println!("m: {:?}", m);
-
-                m = Matrix4::from_translation(&self.pos) * m;
-                println!("m: {:?}", m);
-                println!("");
-                //println!("dir: {:?}, up: {:?}, m: {:?}", dir, up, m);
-                m
+                Matrix4::from_translation(&self.pos) * m
             }
 
             4 => {
-                // copying cgmath's look_at and modifying the translation part, still not working tho
-                //let eye = &self.pos;
-                //let f = self.vel.normalize();
-                //let s = f.cross(&Vector3::unit_y()).normalize();
-                //let u = s.cross(&f);
-
-                //Matrix4::new( s.x.clone(),  u.x.clone(), -f.x.clone(), zero(),
-                //              s.y.clone(),  u.y.clone(), -f.y.clone(), zero(),
-                //              s.z.clone(),  u.z.clone(), -f.z.clone(), zero(),
-                //              eye.x.clone(), eye.y.clone(),  eye.z.clone(),  one())
-                Matrix4::from_translation(&self.pos)
+               Matrix4::from_translation(&self.pos)
             }
 
             5 => {
-                Matrix4::from_translation(&self.pos)
+                let eye = self.pos;
+                let target = self.pos + self.vel;
+                let up = Vector3::unit_y(); // TODO: this is probably not right...
+
+                let za = (eye - target).normalize();
+                let xa = up.cross(&za).normalize();
+                let ya = za.cross(&xa);
+
+                Matrix4::new( xa.x, ya.x, za.x, zero(),
+                              xa.y, ya.y, za.y, zero(),
+                              xa.z, ya.z, za.z, zero(),
+                              -xa.dot(&eye), -ya.dot(&eye), -za.dot(&eye), one())
             }
 
             _ => {
