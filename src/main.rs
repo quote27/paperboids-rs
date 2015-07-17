@@ -174,6 +174,16 @@ fn main() {
     axis_mesh.setup(pos_a, color_a, model_inst_a);
     axis_mesh.update_inst(&axis_model_inst);
 
+    let mut debug_lines_inst = vec![];
+    for _ in 0..shared_bs.len() {
+        debug_lines_inst.push(Matrix4::identity());
+    }
+    let debug_lines_inst = debug_lines_inst;
+    let mut debug_lines_mesh = gen_debug_line_mesh(shared_bs.len());
+    debug_lines_mesh.setup(pos_a, color_a, model_inst_a);
+    debug_lines_mesh.update_inst(&debug_lines_inst);
+
+
     println!("setting up uniforms");
     let alpha_u = prog.get_unif("alpha");
     let view_u = prog.get_unif("view");
@@ -447,6 +457,28 @@ fn main() {
             }
             tm.update(tm_compute_update, section_t.stop());
 
+            {
+                let bs = shared_bs.clone();
+                for i in 0..bs.len() {
+                    let b = &bs[i];
+
+                    let pos = b.pos;
+                    let pos_vel = pos + b.vel;
+
+                    let ip = i * debug_lines_mesh.vertex_size;
+                    let iv = (i + 1) * debug_lines_mesh.vertex_size;
+
+                    debug_lines_mesh.vertices[ip] = pos.x;
+                    debug_lines_mesh.vertices[ip + 1] = pos.y;
+                    debug_lines_mesh.vertices[ip + 2] = pos.z;
+
+                    debug_lines_mesh.vertices[iv] = pos_vel.x;
+                    debug_lines_mesh.vertices[iv + 1] = pos_vel.y;
+                    debug_lines_mesh.vertices[iv + 2] = pos_vel.z;
+                }
+
+                debug_lines_mesh.update_verts();
+            }
 
             section_t.start();
             plane_mesh.update_inst(&shared_model_inst);
@@ -462,6 +494,7 @@ fn main() {
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
+        debug_lines_mesh.draw_inst(debug_lines_inst.len() as GLint);
 
         window.swap_buffers();
         frame_count += 1;
@@ -517,7 +550,7 @@ fn gen_paperplane_mesh() -> Mesh {
     // lines
     let elements = vec![ 0u32, 1, 2, 0, 3, 4 ];
 
-    Mesh::new("paperplane", vertices, elements, vertex_size)
+    Mesh::new("paperplane", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
 fn gen_square_mesh() -> Mesh {
@@ -529,8 +562,8 @@ fn gen_square_mesh() -> Mesh {
         0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
     ];
     let vertex_size = 6;
-    let elements = vec![ 0u32, 1, 1, 2, 2, 3, 3, 0 ];
-    Mesh::new("square", vertices, elements, vertex_size)
+    let elements = vec![ 0u32, 1, 2, 3, ];
+    Mesh::new("square", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
 fn gen_axis_mesh() -> Mesh {
@@ -546,7 +579,7 @@ fn gen_axis_mesh() -> Mesh {
     let vertex_size = 6;
     let elements = vec![ 0u32, 1, 2, 3, 4, 5 ];
 
-    Mesh::new("axis", vertices, elements, vertex_size)
+    Mesh::new("axis", vertices, elements, vertex_size, gl::LINES)
 }
 
 fn gen_cube_mesh() -> Mesh {
@@ -569,7 +602,34 @@ fn gen_cube_mesh() -> Mesh {
         5, 1, 2, 6, 7, 3,
     ];
 
-    Mesh::new("cube", vertices, elements, vertex_size)
+    Mesh::new("cube", vertices, elements, vertex_size, gl::LINE_LOOP)
+}
+
+fn gen_debug_line_mesh(num_boids: usize) -> Mesh {
+    let vertex_size = 6;
+    let mut vertices = vec![];
+    for _ in 0..num_boids {
+        vertices.push(0.0); // vertex
+        vertices.push(0.0);
+        vertices.push(0.0);
+        vertices.push(1.0); // color
+        vertices.push(1.0);
+        vertices.push(1.0);
+
+        vertices.push(0.0); // vertex
+        vertices.push(0.0);
+        vertices.push(0.0);
+        vertices.push(1.0); // color
+        vertices.push(0.0);
+        vertices.push(0.0);
+    }
+
+    let mut elements = vec![];
+    for i in 0..num_boids as u32 {
+        elements.push(i * 2);
+        elements.push(i * 2 + 1);
+    }
+    Mesh::new("debug_lines", vertices, elements, vertex_size, gl::LINES)
 }
 
 

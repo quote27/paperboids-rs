@@ -34,16 +34,18 @@ pub struct Mesh {
     ebo: GLuint,
     ibo: GLuint,
 
-    vertices: Vec<f32>,
-    vertex_size: usize,
+    pub vertices: Vec<f32>,
+    pub vertex_size: usize,
     elements: Vec<u32>,
     name: String,
+
+    gl_type: GLenum,
 }
 
 impl Mesh {
     /// Generate a new mesh with the given vertices and elements.  Moves the vectors
     /// into the struct.  Does not set up any opengl logic.
-    pub fn new(name: &str, v: Vec<f32>, e: Vec<u32>, vert_size: usize) -> Mesh {
+    pub fn new(name: &str, v: Vec<f32>, e: Vec<u32>, vert_size: usize, gl_type: GLenum) -> Mesh {
         Mesh {
             vao: 0,
             vbo: 0,
@@ -53,6 +55,7 @@ impl Mesh {
             vertex_size: vert_size,
             elements: e,
             name: String::from(name),
+            gl_type: gl_type,
         }
     }
 
@@ -119,6 +122,16 @@ impl Mesh {
             gl::BindVertexArray(0);
         }
         gl_error_str("mesh: update_inst");
+    }
+
+    pub fn update_verts(&mut self) {
+        unsafe {
+            gl::BindVertexArray(self.vao);
+            gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
+            gl::BufferData(gl::ARRAY_BUFFER, (self.vertices.len() * mem::size_of::<f32>()) as GLsizeiptr, mem::transmute(&self.vertices[0]), gl::DYNAMIC_DRAW);
+            gl::BindVertexArray(0);
+        }
+        gl_error_str("mesh: update_verts");
     }
 
     /// Draw `num` instances of the mesh.
