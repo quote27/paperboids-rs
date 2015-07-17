@@ -54,6 +54,7 @@ impl Boid {
             0 => {
                 Matrix4::from_translation(&self.pos)
             }
+
             1 => {
                 // this works if there is no y component
                 // - dunno why i have to negate the 'x' direction
@@ -61,6 +62,7 @@ impl Boid {
                 let up = Vector3::unit_y();
                 Matrix4::from_translation(&self.pos) * Matrix4::from(Matrix3::look_at(&dir, &up))
             }
+
             2 => {
                 // using Matrix4::look_at
                 // this is buggy - position is off - seems to orbit the origin
@@ -74,39 +76,47 @@ impl Boid {
                 m.w.w = 1.0;
                 m
             }
+
             3 => {
+                // using Matrix3::look_at with Matrix4::from_translation
+                // almost works... position seems right, but rotation is weird
+                let dir = self.vel;
+                let dir = Vector3::new(-1.0, -1.0, 1.0);
+                //let dir = -Vector3::unit_x();
+                let dir = Vector3::new(-self.vel.x, -self.vel.y, self.vel.z);
+                let up = Vector3::unit_y();
+                let mut m = Matrix4::from(Matrix3::look_at(&dir, &up));
+                println!("m: {:?}", m);
+
+                m = Matrix4::from_translation(&self.pos) * m;
+                println!("m: {:?}", m);
+                println!("");
+                //println!("dir: {:?}, up: {:?}, m: {:?}", dir, up, m);
+                m
             }
 
+            4 => {
+                // copying cgmath's look_at and modifying the translation part, still not working tho
+                //let eye = &self.pos;
+                //let f = self.vel.normalize();
+                //let s = f.cross(&Vector3::unit_y()).normalize();
+                //let u = s.cross(&f);
+
+                //Matrix4::new( s.x.clone(),  u.x.clone(), -f.x.clone(), zero(),
+                //              s.y.clone(),  u.y.clone(), -f.y.clone(), zero(),
+                //              s.z.clone(),  u.z.clone(), -f.z.clone(), zero(),
+                //              eye.x.clone(), eye.y.clone(),  eye.z.clone(),  one())
+                Matrix4::from_translation(&self.pos)
+            }
+
+            5 => {
+                Matrix4::from_translation(&self.pos)
+            }
+
+            _ => {
+                Matrix4::from_translation(&self.pos)
+            }
         }
-
-
-        // using Matrix3::look_at with Matrix4::from_translation
-        // almost works... position seems right, but rotation is weird
-        let dir = self.vel;
-        let dir = Vector3::new(-1.0, -1.0, 1.0);
-        //let dir = -Vector3::unit_x();
-        let dir = Vector3::new(-self.vel.x, -self.vel.y, self.vel.z);
-        let up = Vector3::unit_y();
-        let mut m = Matrix4::from(Matrix3::look_at(&dir, &up));
-        println!("m: {:?}", m);
-
-        m = Matrix4::from_translation(&self.pos) * m;
-        println!("m: {:?}", m);
-        println!("");
-        //println!("dir: {:?}, up: {:?}, m: {:?}", dir, up, m);
-        m
-
-
-        // copying cgmath's look_at and modifying the translation part, still not working tho
-        //let eye = &self.pos;
-        //let f = self.vel.normalize();
-        //let s = f.cross(&Vector3::unit_y()).normalize();
-        //let u = s.cross(&f);
-
-        //Matrix4::new( s.x.clone(),  u.x.clone(), -f.x.clone(), zero(),
-        //              s.y.clone(),  u.y.clone(), -f.y.clone(), zero(),
-        //              s.z.clone(),  u.z.clone(), -f.z.clone(), zero(),
-        //              eye.x.clone(), eye.y.clone(),  eye.z.clone(),  one())
     }
 }
 

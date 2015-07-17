@@ -274,11 +274,17 @@ fn main() {
                 glfw::WindowEvent::Key(Key::Num1, _, Action::Press, _) => {
                     model_mode = 1;
                 }
-                glfw::WindowEvent::Key(Key::Num1, _, Action::Press, _) => {
+                glfw::WindowEvent::Key(Key::Num2, _, Action::Press, _) => {
                     model_mode = 2;
                 }
-                glfw::WindowEvent::Key(Key::Num1, _, Action::Press, _) => {
+                glfw::WindowEvent::Key(Key::Num3, _, Action::Press, _) => {
                     model_mode = 3;
+                }
+                glfw::WindowEvent::Key(Key::Num4, _, Action::Press, _) => {
+                    model_mode = 4;
+                }
+                glfw::WindowEvent::Key(Key::Num5, _, Action::Press, _) => {
+                    model_mode = 5;
                 }
 
                 _ => {}
