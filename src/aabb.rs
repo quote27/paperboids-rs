@@ -70,14 +70,10 @@ impl AABB {
 
     /// Scales the aabb relative to its center.
     pub fn scale_center(&mut self, scale: f32) {
+        let center = self.center();
         self.scale(scale);
 
-        let scale = 1.0 - scale; // (1 - scale) * xl = xl - xl*scale
-        let xl = self.xlen();
-        let yl = self.ylen();
-        let zl = self.zlen();
-
-        let diffv = Vector3::new(xl, yl, zl).mul_s(scale);
+        let diffv = center - center.mul_s(scale);
         self.trans(&diffv);
     }
 
@@ -91,7 +87,7 @@ impl AABB {
 
 impl fmt::Display for AABB {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[l: ({}, {}, {}), h: ({}, {}, {})]", 
+        write!(f, "[l: ({}, {}, {}), h: ({}, {}, {})]",
                self.l.x, self.l.y, self.l.z,
                self.h.x, self.h.y, self.h.z)
     }

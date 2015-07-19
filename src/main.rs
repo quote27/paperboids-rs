@@ -82,14 +82,14 @@ fn main() {
 
     // config variables
     let threads = 4;
-    let world_bounds = AABB::new(Vector3::zero(), Vector3::new(10.0, 10.0, 10.0));
+    let world_bounds = AABB::new(Vector3::zero(), Vector3::new(100.0, 100.0, 100.0));
     let world_scale = 1.0;
     let look_radius = 30.0 * world_scale;
     let look_radius2 = look_radius * look_radius;
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
-    let num_boids = 1;
+    let num_boids = 1000;
     let work_size = num_boids / threads;
 
     let default_weights  = vec![
@@ -103,7 +103,7 @@ fn main() {
     let shared_weights = Arc::new(weights);
 
     let mut fly_bbox = world_bounds.clone();
-    fly_bbox.scale_center(0.5);
+    fly_bbox.scale_center(0.8);
     let fly_bbox = fly_bbox;
 
     unsafe {
@@ -266,19 +266,19 @@ fn main() {
                 }
 
                 glfw::WindowEvent::Key(Key::Up, _, Action::Press, _) => {
-                    vert_view_height = vert_view_height + 0.5;
+                    vert_view_height = vert_view_height + 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Up, _, Action::Repeat, _) => {
-                    vert_view_height = vert_view_height + 0.5;
+                    vert_view_height = vert_view_height + 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Down, _, Action::Press, _) => {
-                    vert_view_height = vert_view_height - 0.5;
+                    vert_view_height = vert_view_height - 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
-                    vert_view_height = vert_view_height - 0.5;
+                    vert_view_height = vert_view_height - 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
 
