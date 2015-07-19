@@ -63,7 +63,7 @@ fn main() {
     println!("paperboids begin");
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (_width, _height) = (300, 300);
+    let (_width, _height) = (600, 600);
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
@@ -130,7 +130,7 @@ fn main() {
 
 
     println!("setting up models");
-    let model_default_scale_mat = Matrix4::identity(); // Matrix4::from(Matrix3::from_value(world_scale));
+    let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
 
     println!("generating {} boids", num_boids);
     let mut bs = Vec::with_capacity(num_boids);
@@ -218,8 +218,8 @@ fn main() {
     let tm_compute_update_inst = "02.4.update_inst";
     let tm_draw_inst ="03.draw_inst";
 
-    let mut model_mode = 0;
     let mut pause = true;
+    let mut debug = false;
     let mut frame_count = 0;
 
     frame_t.start();
@@ -232,16 +232,20 @@ fn main() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
+                glfw::WindowEvent::FramebufferSize(w, h) => {
+                    unsafe { gl::Viewport(0, 0, w, h); }
+                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
+                    proj_u.upload_m4f(&proj_m4);
+                }
+
                 glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
                     window.set_should_close(true);
                 }
                 glfw::WindowEvent::Key(Key::P, _, Action::Press, _) => {
                     pause = !pause;
                 }
-                glfw::WindowEvent::FramebufferSize(w, h) => {
-                    unsafe { gl::Viewport(0, 0, w, h); }
-                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
-                    proj_u.upload_m4f(&proj_m4);
+                glfw::WindowEvent::Key(Key::D, _, Action::Press, _) => {
+                    debug = !debug;
                 }
 
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
@@ -276,25 +280,6 @@ fn main() {
                 glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
                     vert_view_height = vert_view_height - 0.5;
                     view_update = true;
-                }
-
-                glfw::WindowEvent::Key(Key::Num0, _, Action::Press, _) => {
-                    model_mode = 0;
-                }
-                glfw::WindowEvent::Key(Key::Num1, _, Action::Press, _) => {
-                    model_mode = 1;
-                }
-                glfw::WindowEvent::Key(Key::Num2, _, Action::Press, _) => {
-                    model_mode = 2;
-                }
-                glfw::WindowEvent::Key(Key::Num3, _, Action::Press, _) => {
-                    model_mode = 3;
-                }
-                glfw::WindowEvent::Key(Key::Num4, _, Action::Press, _) => {
-                    model_mode = 4;
-                }
-                glfw::WindowEvent::Key(Key::Num5, _, Action::Press, _) => {
-                    model_mode = 5;
                 }
 
                 _ => {}
@@ -457,24 +442,58 @@ fn main() {
             }
             tm.update(tm_compute_update, section_t.stop());
 
-            {
+            if debug {
                 let bs = shared_bs.clone();
                 for i in 0..bs.len() {
                     let b = &bs[i];
 
+                    let i = i * 5;
+
                     let pos = b.pos;
                     let pos_vel = pos + b.vel;
 
+                    // boid origin
                     let ip = i * debug_lines_mesh.vertex_size;
-                    let iv = (i + 1) * debug_lines_mesh.vertex_size;
-
                     debug_lines_mesh.vertices[ip] = pos.x;
                     debug_lines_mesh.vertices[ip + 1] = pos.y;
                     debug_lines_mesh.vertices[ip + 2] = pos.z;
 
+                    // velocity vector
+                    let iv = (i + 1) * debug_lines_mesh.vertex_size;
                     debug_lines_mesh.vertices[iv] = pos_vel.x;
                     debug_lines_mesh.vertices[iv + 1] = pos_vel.y;
                     debug_lines_mesh.vertices[iv + 2] = pos_vel.z;
+
+                    // lookat vectors
+                    let dir = b.vel;
+                    let up = Vector3::unit_y();
+
+                    let dir = dir.normalize();
+                    let pos_dir = pos + dir;
+
+                    let side = up.cross(&dir).normalize();
+                    let pos_side = pos + side;
+
+                    let up = dir.cross(&side).normalize();
+                    let pos_up = pos + up;
+
+                    // lookat forward/dir vector
+                    let ifv = (i + 2) * debug_lines_mesh.vertex_size;
+                    debug_lines_mesh.vertices[ifv] = pos_dir.x;
+                    debug_lines_mesh.vertices[ifv + 1] = pos_dir.y;
+                    debug_lines_mesh.vertices[ifv + 2] = pos_dir.z;
+
+                    // lookat side vector
+                    let isv = (i + 3) * debug_lines_mesh.vertex_size;
+                    debug_lines_mesh.vertices[isv] = pos_side.x;
+                    debug_lines_mesh.vertices[isv + 1] = pos_side.y;
+                    debug_lines_mesh.vertices[isv + 2] = pos_side.z;
+
+                    // lookat up vector
+                    let iuv = (i + 4) * debug_lines_mesh.vertex_size;
+                    debug_lines_mesh.vertices[iuv] = pos_up.x;
+                    debug_lines_mesh.vertices[iuv + 1] = pos_up.y;
+                    debug_lines_mesh.vertices[iuv + 2] = pos_up.z;
                 }
 
                 debug_lines_mesh.update_verts();
@@ -494,7 +513,9 @@ fn main() {
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
-        debug_lines_mesh.draw_inst(debug_lines_inst.len() as GLint);
+        if debug {
+            debug_lines_mesh.draw_inst(debug_lines_inst.len() as GLint);
+        }
 
         window.swap_buffers();
         frame_count += 1;
@@ -504,7 +525,9 @@ fn main() {
         if frame_count % 60 == 0 {
             tm.avg(60);
             let frame_avg = frame_total / 60.0;
-            println!("{:.2} // {}", frame_avg, tm);
+            if !pause {
+                println!("{:.2} // {}", frame_avg, tm);
+            }
             frame_total = 0.0;
             tm.clear();
         }
@@ -609,6 +632,7 @@ fn gen_debug_line_mesh(num_boids: usize) -> Mesh {
     let vertex_size = 6;
     let mut vertices = vec![];
     for _ in 0..num_boids {
+        // origin of the boid
         vertices.push(0.0); // vertex
         vertices.push(0.0);
         vertices.push(0.0);
@@ -616,19 +640,59 @@ fn gen_debug_line_mesh(num_boids: usize) -> Mesh {
         vertices.push(1.0);
         vertices.push(1.0);
 
+        // velocity vector
+        vertices.push(0.0); // vertex
+        vertices.push(0.0);
+        vertices.push(0.0);
+        vertices.push(1.0); // color
+        vertices.push(1.0);
+        vertices.push(0.0);
+
+        // lookat forward vector
+        vertices.push(0.0); // vertex
+        vertices.push(0.0);
+        vertices.push(0.0);
+        vertices.push(0.0); // color
+        vertices.push(0.0);
+        vertices.push(1.0);
+
+        // lookat side vector
         vertices.push(0.0); // vertex
         vertices.push(0.0);
         vertices.push(0.0);
         vertices.push(1.0); // color
         vertices.push(0.0);
+        vertices.push(0.0);
+
+        // lookat up vector
+        vertices.push(0.0); // vertex
+        vertices.push(0.0);
+        vertices.push(0.0);
+        vertices.push(0.0); // color
+        vertices.push(1.0);
         vertices.push(0.0);
     }
 
     let mut elements = vec![];
     for i in 0..num_boids as u32 {
-        elements.push(i * 2);
-        elements.push(i * 2 + 1);
+        let i = i * 5;
+        // velocity
+        elements.push(i);
+        elements.push(i + 1);
+
+        // lookat forward
+        elements.push(i);
+        elements.push(i + 2);
+
+        // lookat side
+        elements.push(i);
+        elements.push(i + 3);
+
+        // lookat up
+        elements.push(i);
+        elements.push(i + 4);
     }
+
     Mesh::new("debug_lines", vertices, elements, vertex_size, gl::LINES)
 }
 
