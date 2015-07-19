@@ -138,7 +138,7 @@ impl Mesh {
     pub fn draw_inst(&mut self, num: GLint) {
         unsafe {
             gl::BindVertexArray(self.vao);
-            gl::DrawElementsInstanced(gl::LINE_LOOP, self.elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), num);
+            gl::DrawElementsInstanced(self.gl_type, self.elements.len() as i32, gl::UNSIGNED_INT, ptr::null(), num);
             gl::BindVertexArray(0);
         }
         gl_error_str("mesh: draw_inst");
