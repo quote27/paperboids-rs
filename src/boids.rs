@@ -32,8 +32,8 @@ impl Boid {
 
     pub fn update(&mut self, dt: f32, world_scale: f32) {
         // TODO: figure out where to put these speed constants
-        let max_speed = 2.0 * world_scale;
-        let min_speed = 0.5 * world_scale;
+        let max_speed = 25.0 * world_scale;
+        let min_speed = 4.0 * world_scale;
 
         self.vel = self.vel + self.acc.mul_s(dt);
 
@@ -47,69 +47,20 @@ impl Boid {
         self.pos = self.pos + self.vel.mul_s(dt);
     }
 
-    pub fn model(&self, mode: i32) -> Matrix4<f32> {
+    pub fn model(&self) -> Matrix4<f32> {
         // TODO: figure out 'up' vector to get bank rotation animation
 
-        match mode {
-            0 => {
-                Matrix4::from_translation(&self.pos)
-            }
+        // note: replicating cgmath's Matrix3::look_at but without the added transpose
+        // this logic rotates the boid correctly, not sure if the transpose is a bug or not
+        let dir = self.vel;
+        let up = Vector3::unit_y();
 
-            1 => {
-                // this works if there is no y component
-                // - dunno why i have to negate the 'x' direction
-                let dir = Vector3::new(-self.vel.x, 0.0f32, self.vel.z);
-                let up = Vector3::unit_y();
-                Matrix4::from_translation(&self.pos) * Matrix4::from(Matrix3::look_at(&dir, &up))
-            }
+        let dir = dir.normalize();
+        let side = up.cross(&dir).normalize();
+        let up = dir.cross(&side).normalize();
+        let m3 = Matrix3::from_cols(side, up, dir);
 
-            2 => {
-                // using Matrix4::look_at
-                // this is buggy - position is off - seems to orbit the origin
-                let eye = Point3::from_vec(&self.pos);
-                let center = Point3::from_vec(&(self.pos + self.vel));
-                let up = Vector3::unit_y();
-                let mut m = Matrix4::look_at(&eye, &center, &up);
-                m.w.x = 0.0;
-                m.w.y = 0.0;
-                m.w.z = 0.0;
-                m.w.w = 1.0;
-                m
-            }
-
-            3 => {
-                // using Matrix3::look_at with Matrix4::from_translation
-                // works when the y velocity component is 0
-                let dir = Vector3::new(-self.vel.x, self.vel.y, self.vel.z);
-                let dir = Vector3::new(-self.vel.x, 0.0, self.vel.z);
-                let up = Vector3::unit_y();
-                let mut m = Matrix4::from(Matrix3::look_at(&dir, &up));
-                Matrix4::from_translation(&self.pos) * m
-            }
-
-            4 => {
-               Matrix4::from_translation(&self.pos)
-            }
-
-            5 => {
-                let eye = self.pos;
-                let target = self.pos + self.vel;
-                let up = Vector3::unit_y(); // TODO: this is probably not right...
-
-                let za = (eye - target).normalize();
-                let xa = up.cross(&za).normalize();
-                let ya = za.cross(&xa);
-
-                Matrix4::new( xa.x, ya.x, za.x, zero(),
-                              xa.y, ya.y, za.y, zero(),
-                              xa.z, ya.z, za.z, zero(),
-                              -xa.dot(&eye), -ya.dot(&eye), -za.dot(&eye), one())
-            }
-
-            _ => {
-                Matrix4::from_translation(&self.pos)
-            }
-        }
+        Matrix4::from_translation(&self.pos) * Matrix4::from(m3)
     }
 }
 

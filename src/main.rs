@@ -140,7 +140,7 @@ fn main() {
 
     let mut model_inst = Vec::with_capacity(bs.len());
     for b in bs.iter() {
-        model_inst.push(b.model(0) * model_default_scale_mat);
+        model_inst.push(b.model() * model_default_scale_mat);
     }
     let mut plane_mesh = gen_paperplane_mesh();
     plane_mesh.setup(pos_a, color_a, model_inst_a);
@@ -444,7 +444,7 @@ fn main() {
 
                             let m = &model_inst[i];
                             let m: &mut Matrix4<f32> = mem::transmute(m);
-                            *m = b.model(model_mode) * model_default_scale_mat;
+                            *m = b.model() * model_default_scale_mat;
                         }
                     }
 
