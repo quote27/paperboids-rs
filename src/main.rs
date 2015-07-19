@@ -81,15 +81,15 @@ fn main() {
     //glfw.set_swap_interval(0); // set this to 0 to unlock frame rate
 
     // config variables
-    let threads = 4;
+    let threads = 8;
     let world_bounds = AABB::new(Vector3::zero(), Vector3::new(100.0, 100.0, 100.0));
-    let world_scale = 1.0;
+    let world_scale = 0.5;
     let look_radius = 30.0 * world_scale;
     let look_radius2 = look_radius * look_radius;
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
-    let num_boids = 1000;
+    let num_boids = 10000;
     let work_size = num_boids / threads;
 
     let default_weights  = vec![
@@ -210,25 +210,28 @@ fn main() {
     let mut frame_total = 0.0;
 
     let tm_frame = "00.frame";
-    let tm_events = "01.events";
-    let tm_compute = "02.0.compute";
-    let tm_compute_octree_build = "02.1.octree_build";
+    let tm_events = "01.e";
+    let tm_compute = "02.0.c";
+    let tm_compute_octree_build = "02.1.obuild";
     let tm_compute_rules = "02.2.rules";
-    let tm_compute_update = "02.3.update";
-    let tm_compute_update_inst = "02.4.update_inst";
-    let tm_draw_inst ="03.draw_inst";
+    let tm_compute_update = "02.3.u_boid";
+    let tm_compute_update_inst = "02.4.u_inst";
+    let tm_draw_inst ="03.draw_i";
 
     let mut pause = true;
     let mut debug = false;
+    let mut debug_verbose = false;
+    let mut enable_octree = false;
     let mut frame_count = 0;
 
     frame_t.start();
     println!("starting main loop");
     while !window.should_close() {
+        if debug_verbose { println!("{}: frame start", frame_count); }
         let tlastframe = frame_t.stop();
         frame_t.start();
 
-        section_t.start();
+        section_t.start(); // events
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
@@ -246,6 +249,12 @@ fn main() {
                 }
                 glfw::WindowEvent::Key(Key::D, _, Action::Press, _) => {
                     debug = !debug;
+                }
+                glfw::WindowEvent::Key(Key::V, _, Action::Press, _) => {
+                    debug_verbose = !debug_verbose;
+                }
+                glfw::WindowEvent::Key(Key::O, _, Action::Press, _) => {
+                    enable_octree = !enable_octree;
                 }
 
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
@@ -302,6 +311,7 @@ fn main() {
             view_u.upload_m4f(&view_m4);
         }
         tm.update(tm_events, section_t.stop());
+        if debug_verbose { println!("{}: event parse + view update", frame_count); }
 
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
@@ -310,26 +320,33 @@ fn main() {
 
         compute_t.start();
         if !pause {
-            section_t.start();
+            if debug_verbose { println!("{}: compute start", frame_count); }
             let dt = (tlastframe as f32) * 1e-3; // convert from ms to sec
 
             // octree build step
-            {
+            if enable_octree {
+                section_t.start();
                 // TODO: need to figure out a non-hack for read/write here
                 // I could use a RWLock like before, but that won't help when
                 // it comes to parallel builds
                 let octree: &mut Octree = unsafe { mem::transmute(&*shared_octree) };
+                if debug_verbose { println!("{}: octree reset", frame_count); }
                 octree.reset(world_bounds);
 
                 let bs = shared_bs.clone(); // just need read access
 
-                octree.insert(&*bs);
+                if debug_verbose { println!("{}: octree insert", frame_count); }
+                octree.insert(&*bs); // FIXME: overflow in insert logic
+                if debug_verbose { println!("{}: octree update", frame_count); }
                 octree.update(&*bs);
 
                 // TODO: add octree debug drawing using cubes
-            }
-            tm.update(tm_compute_octree_build, section_t.stop());
 
+                if debug_verbose { println!("{}: octree fin", frame_count); }
+                tm.update(tm_compute_octree_build, section_t.stop());
+            }
+
+            if debug_verbose { println!("{}: sim start", frame_count); }
             section_t.start();
             // simulation run step
             let (tx, rx) = mpsc::channel();
@@ -357,8 +374,12 @@ fn main() {
                         rules[0] = Vector3::zero();
 
                         {
-                            //let (r1, r2, r3) = calc_rules(&bs, i, look_radius2, collide_radius2);
-                            let (r1, r2, r3) = calc_rules_octree(&bs, i, &*octree, look_radius, look_radius2, collide_radius2);
+                            let (r1, r2, r3) =
+                                if enable_octree {
+                                    calc_rules_octree(&bs, i, &*octree, look_radius, look_radius2, collide_radius2)
+                                } else {
+                                    calc_rules(&bs, i, look_radius2, collide_radius2)
+                                };
                             rules[1] = r1.mul_s(weights[1]);
                             rules[2] = r2.mul_s(weights[2]);
                             rules[3] = r3.mul_s(weights[3]);
@@ -402,7 +423,9 @@ fn main() {
                 rx.recv();
             }
             tm.update(tm_compute_rules, section_t.stop());
+            if debug_verbose { println!("{}: sim stop", frame_count); }
 
+            if debug_verbose { println!("{}: update start", frame_count); }
             section_t.start();
             for tid in 0..threads {
                 let thread_tx = tx.clone();
@@ -441,6 +464,7 @@ fn main() {
                 rx.recv();
             }
             tm.update(tm_compute_update, section_t.stop());
+            if debug_verbose { println!("{}: update stop", frame_count); }
 
             if debug {
                 let bs = shared_bs.clone();
@@ -499,9 +523,11 @@ fn main() {
                 debug_lines_mesh.update_verts();
             }
 
+            if debug_verbose { println!("{}: plane update inst start", frame_count); }
             section_t.start();
             plane_mesh.update_inst(&shared_model_inst);
             tm.update(tm_compute_update_inst, section_t.stop());
+            if debug_verbose { println!("{}: plane update inst fin", frame_count); }
         }
 
         tm.update(tm_compute, compute_t.stop());
@@ -531,6 +557,7 @@ fn main() {
             frame_total = 0.0;
             tm.clear();
         }
+        if debug_verbose { println!("{}: frame end", frame_count); }
     }
 
     println!("paperboids end");
