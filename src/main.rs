@@ -11,7 +11,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::mem;
 use gl::types::*;
-use glfw::{Action, Context, Key};
+use glfw::{Action, Context, Key, Modifiers};
 use cgmath::*;
 use shaders::{Shader, Program};
 use mesh::Mesh;
@@ -28,11 +28,7 @@ mod boids;
 mod octree;
 
 // todo list
-// TODO: migrate octree build and lookup
 // TODO: add command line options
-// TODO: debug - draw aabb for octree
-// TODO: draw axis
-// TODO: figure out why birds seem to be moving faster than before
 
 static VS_SRC: &'static str = "
 #version 330 core
@@ -161,7 +157,7 @@ fn main() {
         Matrix4::from_translation(&fly_bbox.center()) *
             Matrix4::from(Matrix3::from_value(fly_bbox.xlen())),
     ];
-    let mut cube_mesh = gen_cube_mesh();
+    let mut cube_mesh = gen_cube_mesh(&Vector3::new(1.0, 1.0, 1.0));
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
@@ -182,6 +178,14 @@ fn main() {
     let mut debug_lines_mesh = gen_debug_line_mesh(shared_bs.len());
     debug_lines_mesh.setup(pos_a, color_a, model_inst_a);
     debug_lines_mesh.update_inst(&debug_lines_inst);
+
+    let mut debug_octree_inst = vec![];
+    for _ in 0..shared_bs.len() {
+        debug_octree_inst.push(Matrix4::identity());
+    }
+    let mut debug_octree_mesh = gen_cube_mesh(&Vector3::new(1.0, 1.0, 0.0));
+    debug_octree_mesh.setup(pos_a, color_a, model_inst_a);
+    debug_octree_mesh.update_inst(&debug_octree_inst);
 
 
     println!("setting up uniforms");
@@ -222,6 +226,7 @@ fn main() {
     let mut debug = false;
     let mut debug_verbose = false;
     let mut enable_octree = false;
+    let mut debug_octree_level = 0; // 0: no debug, 1: leaves, 2: nodes, 3: all
     let mut frame_count = 0;
 
     frame_t.start();
@@ -253,8 +258,12 @@ fn main() {
                 glfw::WindowEvent::Key(Key::V, _, Action::Press, _) => {
                     debug_verbose = !debug_verbose;
                 }
-                glfw::WindowEvent::Key(Key::O, _, Action::Press, _) => {
-                    enable_octree = !enable_octree;
+                glfw::WindowEvent::Key(Key::O, _, Action::Press, mods) => {
+                    if mods.contains(glfw::Shift) {
+                        debug_octree_level = (debug_octree_level + 1) % 4;
+                    } else {
+                        enable_octree = !enable_octree;
+                    }
                 }
 
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
@@ -341,6 +350,27 @@ fn main() {
                 octree.update(&*bs);
 
                 // TODO: add octree debug drawing using cubes
+                if debug_octree_level > 0 {
+                    debug_octree_inst.clear();
+                    debug_octree_inst.reserve(octree.pool.len());
+
+                    for o in octree.pool.iter() {
+                        let draw = match o.state {
+                            octree::OctnodeState::Node => debug_octree_level >= 2,
+                            octree::OctnodeState::Leaf => debug_octree_level == 1 || debug_octree_level == 3,
+                            _ => false,
+                        };
+
+                        if draw {
+                            debug_octree_inst.push(
+                                Matrix4::from_translation(&o.bbox.center()) *
+                                Matrix4::from(Matrix3::from_value(o.bbox.xlen()))
+                                );
+                        }
+                    }
+
+                    debug_octree_mesh.update_inst(&debug_octree_inst);
+                }
 
                 if debug_verbose { println!("{}: octree fin", frame_count); }
                 tm.update(tm_compute_octree_build, section_t.stop());
@@ -542,6 +572,9 @@ fn main() {
         if debug {
             debug_lines_mesh.draw_inst(debug_lines_inst.len() as GLint);
         }
+        if enable_octree && (debug_octree_level > 0) {
+            debug_octree_mesh.draw_inst(debug_octree_inst.len() as GLint);
+        }
 
         window.swap_buffers();
         frame_count += 1;
@@ -632,17 +665,17 @@ fn gen_axis_mesh() -> Mesh {
     Mesh::new("axis", vertices, elements, vertex_size, gl::LINES)
 }
 
-fn gen_cube_mesh() -> Mesh {
+fn gen_cube_mesh(color: &Vector3<f32>) -> Mesh {
     let vertices = vec![
         // vertex        // color
-       -0.5, -0.5, -0.5, 1.0, 1.0, 1.0f32,
-       -0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
-        0.5, -0.5,  0.5, 1.0, 1.0, 1.0,
-        0.5, -0.5, -0.5, 1.0, 1.0, 1.0,
-       -0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
-       -0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
-        0.5,  0.5,  0.5, 1.0, 1.0, 1.0,
-        0.5,  0.5, -0.5, 1.0, 1.0, 1.0,
+       -0.5, -0.5, -0.5, color.x, color.y, color.z,
+       -0.5, -0.5,  0.5, color.x, color.y, color.z,
+        0.5, -0.5,  0.5, color.x, color.y, color.z,
+        0.5, -0.5, -0.5, color.x, color.y, color.z,
+       -0.5,  0.5, -0.5, color.x, color.y, color.z,
+       -0.5,  0.5,  0.5, color.x, color.y, color.z,
+        0.5,  0.5,  0.5, color.x, color.y, color.z,
+        0.5,  0.5, -0.5, color.x, color.y, color.z,
     ];
 
     let vertex_size = 6;
