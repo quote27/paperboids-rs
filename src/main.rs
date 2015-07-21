@@ -72,6 +72,7 @@ fn main() {
     gl::load_with(|s| window.get_proc_address(s));
 
     window.set_key_polling(true);
+    window.set_scroll_polling(true);
     window.set_framebuffer_size_polling(true);
     window.make_current();
     //glfw.set_swap_interval(0); // set this to 0 to unlock frame rate
@@ -262,6 +263,23 @@ fn main() {
                         debug_octree_level = (debug_octree_level + 1) % 4;
                     } else {
                         enable_octree = !enable_octree;
+                    }
+                }
+
+                glfw::WindowEvent::Scroll(xoff, yoff) => {
+                    let off_epsilon = 0.15;
+                    let xoff = xoff as f32;
+                    let yoff = yoff as f32;
+                    if debug_verbose { println!("{}: scroll: x: {}, y: {}", frame_count, xoff, yoff); }
+
+                    if xoff.abs() > off_epsilon {
+                        horiz_view_angle = horiz_view_angle + deg(180.0 * xoff);
+                        view_update = true;
+                    }
+
+                    if yoff.abs() > off_epsilon {
+                        vert_view_height = vert_view_height + 0.5 * (world_bounds.xlen() / 10.0) * yoff;
+                        view_update = true;
                     }
                 }
 
