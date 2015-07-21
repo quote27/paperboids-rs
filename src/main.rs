@@ -265,41 +265,25 @@ fn main() {
                     }
                 }
 
-                glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) => {
+                glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, _)=> {
                     horiz_view_angle = horiz_view_angle + deg(180.0);
                     view_update = true;
                 }
-                glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, _) => {
-                    horiz_view_angle = horiz_view_angle + deg(180.0);
-                    view_update = true;
-                }
-                glfw::WindowEvent::Key(Key::Right, _, Action::Press, _) => {
-                    horiz_view_angle = horiz_view_angle - deg(180.0);
-                    view_update = true;
-                }
-                glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, _) => {
+                glfw::WindowEvent::Key(Key::Right, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, _) => {
                     horiz_view_angle = horiz_view_angle - deg(180.0);
                     view_update = true;
                 }
 
-                glfw::WindowEvent::Key(Key::Up, _, Action::Press, _) => {
+                glfw::WindowEvent::Key(Key::Up, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Up, _, Action::Repeat, _) => {
                     vert_view_height = vert_view_height + 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
-                glfw::WindowEvent::Key(Key::Up, _, Action::Repeat, _) => {
-                    vert_view_height = vert_view_height + 0.5 * (world_bounds.xlen() / 10.0);
-                    view_update = true;
-                }
-                glfw::WindowEvent::Key(Key::Down, _, Action::Press, _) => {
-                    vert_view_height = vert_view_height - 0.5 * (world_bounds.xlen() / 10.0);
-                    view_update = true;
-                }
-                glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
+                glfw::WindowEvent::Key(Key::Down, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
                     vert_view_height = vert_view_height - 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
 
-                glfw::WindowEvent::Key(Key::Equal, _, Action::Press, _) => {
+                glfw::WindowEvent::Key(Key::Equal, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Equal, _, Action::Repeat, _) => {
                     let b = Boid::random_new(&fly_bbox);
                     unsafe {
                         let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
@@ -312,7 +296,7 @@ fn main() {
                     println!("{}: pushed new boid: num: {}, work_size: {}", frame_count, num_boids, work_size);
                 }
 
-                glfw::WindowEvent::Key(Key::Minus, _, Action::Press, _) => {
+                glfw::WindowEvent::Key(Key::Minus, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, _) => {
                     if shared_bs.len() > 1 {
                         unsafe {
                             let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
