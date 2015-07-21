@@ -11,7 +11,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::mem;
 use gl::types::*;
-use glfw::{Action, Context, Key, Modifiers};
+use glfw::{Action, Context, Key};
 use cgmath::*;
 use shaders::{Shader, Program};
 use mesh::Mesh;
@@ -315,7 +315,8 @@ fn main() {
                     }
                     num_boids = shared_bs.len();
                     work_size = num_boids / threads;
-                    println!("{}: pushed new boid: num: {}, work_size: {}", frame_count, num_boids, work_size);
+                    resize_debug_line_mesh(&mut debug_lines_mesh, num_boids);
+                    if debug_verbose { println!("{}: pushed new boid: num: {}, work_size: {}", frame_count, num_boids, work_size); }
                 }
 
                 glfw::WindowEvent::Key(Key::Minus, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, mods) => {
@@ -332,7 +333,8 @@ fn main() {
                         }
                         num_boids = shared_bs.len();
                         work_size = num_boids / threads;
-                        println!("{}: removed boid: num: {}, work_size: {}", frame_count, num_boids, work_size);
+                        resize_debug_line_mesh(&mut debug_lines_mesh, num_boids);
+                        if debug_verbose { println!("{}: removed boid: num: {}, work_size: {}", frame_count, num_boids, work_size); }
                     }
                 }
 
@@ -726,72 +728,98 @@ fn gen_cube_mesh(color: &Vector3<f32>) -> Mesh {
 
 fn gen_debug_line_mesh(num_boids: usize) -> Mesh {
     let vertex_size = 6;
-    let mut vertices = vec![];
-    for _ in 0..num_boids {
-        // origin of the boid
-        vertices.push(0.0); // vertex
-        vertices.push(0.0);
-        vertices.push(0.0);
-        vertices.push(1.0); // color
-        vertices.push(1.0);
-        vertices.push(1.0);
+    let vertices = vec![];
+    let elements = vec![];
 
-        // velocity vector
-        vertices.push(0.0); // vertex
-        vertices.push(0.0);
-        vertices.push(0.0);
-        vertices.push(1.0); // color
-        vertices.push(1.0);
-        vertices.push(0.0);
-
-        // lookat forward vector
-        vertices.push(0.0); // vertex
-        vertices.push(0.0);
-        vertices.push(0.0);
-        vertices.push(0.0); // color
-        vertices.push(0.0);
-        vertices.push(1.0);
-
-        // lookat side vector
-        vertices.push(0.0); // vertex
-        vertices.push(0.0);
-        vertices.push(0.0);
-        vertices.push(1.0); // color
-        vertices.push(0.0);
-        vertices.push(0.0);
-
-        // lookat up vector
-        vertices.push(0.0); // vertex
-        vertices.push(0.0);
-        vertices.push(0.0);
-        vertices.push(0.0); // color
-        vertices.push(1.0);
-        vertices.push(0.0);
-    }
-
-    let mut elements = vec![];
-    for i in 0..num_boids as u32 {
-        let i = i * 5;
-        // velocity
-        elements.push(i);
-        elements.push(i + 1);
-
-        // lookat forward
-        elements.push(i);
-        elements.push(i + 2);
-
-        // lookat side
-        elements.push(i);
-        elements.push(i + 3);
-
-        // lookat up
-        elements.push(i);
-        elements.push(i + 4);
-    }
-
-    Mesh::new("debug_lines", vertices, elements, vertex_size, gl::LINES)
+    let mut m = Mesh::new("debug_lines", vertices, elements, vertex_size, gl::LINES);
+    resize_debug_line_mesh(&mut m, num_boids);
+    m
 }
 
+fn resize_debug_line_mesh(mesh: &mut Mesh, num_boids: usize) {
+    let num_verts = mesh.vertex_size * 5 * num_boids;
+    let num_elem = 2 * 4 * num_boids;
+
+    // println!("resize line mesh: num boids: {}, verts: {} -> {}, elem: {} -> {}", num_boids, mesh.vertices.len(), num_verts, mesh.elements.len(), num_elem);
+
+    if mesh.vertices.len() > num_verts {
+        // shrink
+        mesh.vertices.truncate(num_verts);
+        mesh.elements.truncate(num_elem);
+        // println!("resize line mesh: shrinking, new verts len: {}, elem len: {}", mesh.vertices.len(), mesh.elements.len());
+
+    } else {
+        // grow
+        let old_num_boids = mesh.vertices.len() / (mesh.vertex_size * 5);
+        // println!("resize line mesh: growing, old boids len: {}", old_num_boids);
+
+        for _ in old_num_boids..num_boids {
+            // origin of the boid
+            mesh.vertices.push(0.0); // vertex
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(1.0); // color
+            mesh.vertices.push(1.0);
+            mesh.vertices.push(1.0);
+
+            // velocity vector
+            mesh.vertices.push(0.0); // vertex
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(1.0); // color
+            mesh.vertices.push(1.0);
+            mesh.vertices.push(0.0);
+
+            // lookat forward vector
+            mesh.vertices.push(0.0); // vertex
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0); // color
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(1.0);
+
+            // lookat side vector
+            mesh.vertices.push(0.0); // vertex
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(1.0); // color
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0);
+
+            // lookat up vector
+            mesh.vertices.push(0.0); // vertex
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0);
+            mesh.vertices.push(0.0); // color
+            mesh.vertices.push(1.0);
+            mesh.vertices.push(0.0);
+        }
+
+        for i in old_num_boids..num_boids {
+            let i = i as u32 * 5;
+            // velocity
+            mesh.elements.push(i);
+            mesh.elements.push(i + 1);
+
+            // lookat forward
+            mesh.elements.push(i);
+            mesh.elements.push(i + 2);
+
+            // lookat side
+            mesh.elements.push(i);
+            mesh.elements.push(i + 3);
+
+            // lookat up
+            mesh.elements.push(i);
+            mesh.elements.push(i + 4);
+        }
+
+        // println!("resize line mesh: growing, new verts len: {}, elem len: {}", mesh.vertices.len(), mesh.elements.len());
+    }
+
+    mesh.update_verts();
+    mesh.update_elem();
+}
 
 fn bounds_v(b: &Boid, bbox: &AABB) -> Vector3<f32> {
     let mut bounds = Vector3::zero();

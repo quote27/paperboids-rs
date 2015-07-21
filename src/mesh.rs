@@ -36,7 +36,7 @@ pub struct Mesh {
 
     pub vertices: Vec<f32>,
     pub vertex_size: usize,
-    elements: Vec<u32>,
+    pub elements: Vec<u32>,
     name: String,
 
     gl_type: GLenum,
@@ -124,6 +124,7 @@ impl Mesh {
         gl_error_str("mesh: update_inst");
     }
 
+    /// Re-upload the vertex array buffer.
     pub fn update_verts(&mut self) {
         unsafe {
             gl::BindVertexArray(self.vao);
@@ -132,6 +133,17 @@ impl Mesh {
             gl::BindVertexArray(0);
         }
         gl_error_str("mesh: update_verts");
+    }
+
+    /// Re-upload the element array buffer.
+    pub fn update_elem(&mut self) {
+        unsafe {
+            gl::BindVertexArray(self.vao);
+            gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.ebo);
+            gl::BufferData(gl::ELEMENT_ARRAY_BUFFER, (self.elements.len() * mem::size_of::<f32>()) as GLsizeiptr, mem::transmute(&self.elements[0]), gl::STATIC_DRAW);
+            gl::BindVertexArray(0);
+        }
+        gl_error_str("mesh: update_elems");
     }
 
     /// Draw `num` instances of the mesh.
