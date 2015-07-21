@@ -85,8 +85,8 @@ fn main() {
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
-    let num_boids = 10000;
-    let work_size = num_boids / threads;
+    let mut num_boids = 2;
+    let mut work_size = num_boids / threads;
 
     let default_weights  = vec![
         30.0, // avoid obstacles
@@ -162,7 +162,6 @@ fn main() {
     cube_mesh.update_inst(&cube_model_inst);
 
     let axis_model_inst = vec![
-        //Matrix4::from_translation(&world_bounds.center()) *
         Matrix4::from_translation(&Vector3::new(0.5, 0.5, 0.5)) *
             Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
     ];
@@ -300,6 +299,33 @@ fn main() {
                     view_update = true;
                 }
 
+                glfw::WindowEvent::Key(Key::Equal, _, Action::Press, _) => {
+                    let b = Boid::random_new(&fly_bbox);
+                    unsafe {
+                        let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
+                        msmi.push(b.model() * model_default_scale_mat);
+                        let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
+                        mbs.push(b);
+                    }
+                    num_boids = shared_bs.len();
+                    work_size = num_boids / threads;
+                    println!("{}: pushed new boid: num: {}, work_size: {}", frame_count, num_boids, work_size);
+                }
+
+                glfw::WindowEvent::Key(Key::Minus, _, Action::Press, _) => {
+                    if shared_bs.len() > 1 {
+                        unsafe {
+                            let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
+                            mbs.pop();
+                            let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
+                            msmi.pop();
+                        }
+                        num_boids = shared_bs.len();
+                        work_size = num_boids / threads;
+                        println!("{}: removed boid: num: {}, work_size: {}", frame_count, num_boids, work_size);
+                    }
+                }
+
                 _ => {}
             }
         }
@@ -376,7 +402,7 @@ fn main() {
                 tm.update(tm_compute_octree_build, section_t.stop());
             }
 
-            if debug_verbose { println!("{}: sim start", frame_count); }
+            if debug_verbose { println!("{}: sim start: {} boids", frame_count, shared_bs.len()); }
             section_t.start();
             // simulation run step
             let (tx, rx) = mpsc::channel();
