@@ -283,26 +283,34 @@ fn main() {
                     view_update = true;
                 }
 
-                glfw::WindowEvent::Key(Key::Equal, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Equal, _, Action::Repeat, _) => {
-                    let b = Boid::random_new(&fly_bbox);
+                glfw::WindowEvent::Key(Key::Equal, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Equal, _, Action::Repeat, mods) => {
+                    let num_add = if mods.contains(glfw::Shift) { 10 } else { 1 };
                     unsafe {
                         let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
-                        msmi.push(b.model() * model_default_scale_mat);
                         let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
-                        mbs.push(b);
+
+                        for _ in 0..num_add {
+                            let b = Boid::random_new(&fly_bbox);
+                            msmi.push(b.model() * model_default_scale_mat);
+                            mbs.push(b);
+                        }
                     }
                     num_boids = shared_bs.len();
                     work_size = num_boids / threads;
                     println!("{}: pushed new boid: num: {}, work_size: {}", frame_count, num_boids, work_size);
                 }
 
-                glfw::WindowEvent::Key(Key::Minus, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, _) => {
+                glfw::WindowEvent::Key(Key::Minus, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, mods) => {
                     if shared_bs.len() > 1 {
+                        let num_remove = if mods.contains(glfw::Shift) { 10 } else { 1 };
+                        let num_remove = if num_remove > shared_bs.len() - 1 { shared_bs.len() - 1 } else { num_remove };
                         unsafe {
                             let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
-                            mbs.pop();
                             let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
-                            msmi.pop();
+                            for _ in 0..num_remove {
+                                mbs.pop();
+                                msmi.pop();
+                            }
                         }
                         num_boids = shared_bs.len();
                         work_size = num_boids / threads;
