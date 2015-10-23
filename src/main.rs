@@ -639,12 +639,10 @@ fn main() {
         // write frame to disk
         unsafe {
             section_t.start();
-            {
             gl::ReadBuffer(gl::FRONT);
             gl::ReadPixels(0, 0, _width as i32, _height as i32, gl::RGB, gl::UNSIGNED_BYTE, mem::transmute(image_buf.as_mut_ptr()));
-            }
 
-            image_buf.save(&image_buf_path);
+            image::imageops::flip_vertical(&image_buf).save(&image_buf_path);
 
             println!("saving image: {}", section_t.stop());
 
