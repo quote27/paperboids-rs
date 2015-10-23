@@ -1,10 +1,12 @@
 #![feature(negate_unsigned)]
 #![allow(mutable_transmutes)]
+#![feature(convert)]
 extern crate gl;
 extern crate glfw;
 extern crate cgmath;
 extern crate time;
 extern crate rand;
+extern crate image;
 
 use std::thread;
 use std::sync::mpsc;
@@ -64,7 +66,7 @@ fn main() {
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
-    glfw.window_hint(glfw::WindowHint::Resizable(true));
+    glfw.window_hint(glfw::WindowHint::Resizable(false));
 
     let (mut window, events) = glfw.create_window(_width, _height, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
@@ -228,6 +230,10 @@ fn main() {
     let mut enable_octree = false;
     let mut debug_octree_level = 0; // 0: no debug, 1: leaves, 2: nodes, 3: all
     let mut frame_count = 0;
+
+    // setup image buffer for saving frames
+    let mut image_buf: image::ImageBuffer<image::Rgb<u8>, _> = image::ImageBuffer::new(_width, _height);
+    let image_buf_path = std::path::Path::new("frame.png");
 
     frame_t.start();
     println!("starting main loop");
@@ -629,6 +635,20 @@ fn main() {
             tm.clear();
         }
         if debug_verbose { println!("{}: frame end", frame_count); }
+
+        // write frame to disk
+        unsafe {
+            section_t.start();
+            {
+            gl::ReadBuffer(gl::FRONT);
+            gl::ReadPixels(0, 0, _width as i32, _height as i32, gl::RGB, gl::UNSIGNED_BYTE, mem::transmute(image_buf.as_mut_ptr()));
+            }
+
+            image_buf.save(&image_buf_path);
+
+            println!("saving image: {}", section_t.stop());
+
+        }
     }
 
     println!("paperboids end");
