@@ -7,11 +7,14 @@ extern crate cgmath;
 extern crate time;
 extern crate rand;
 extern crate image;
+extern crate png;
+extern crate byteorder;
 
 use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::mem;
+use std::fs::File;
 use gl::types::*;
 use glfw::{Action, Context, Key};
 use cgmath::*;
@@ -233,7 +236,10 @@ fn main() {
 
     // setup image buffer for saving frames
     let mut image_buf: image::ImageBuffer<image::Rgb<u8>, _> = image::ImageBuffer::new(_width, _height);
-    let image_buf_path = std::path::Path::new("frame.png");
+    let image_buf_path = std::path::Path::new("frame.png.pipe");
+    println!("trying to open frame pipe");
+    let ref mut fout = std::fs::File::create(image_buf_path).unwrap();
+    println!("pipe opened");
 
     frame_t.start();
     println!("starting main loop");
@@ -640,9 +646,11 @@ fn main() {
         unsafe {
             section_t.start();
             gl::ReadBuffer(gl::FRONT);
-            gl::ReadPixels(0, 0, _width as i32, _height as i32, gl::RGB, gl::UNSIGNED_BYTE, mem::transmute(image_buf.as_mut_ptr()));
+            gl::ReadPixels(0, 0, _width as i32, _height as i32, gl::BGR, gl::UNSIGNED_BYTE, mem::transmute(image_buf.as_mut_ptr()));
 
-            image::imageops::flip_vertical(&image_buf).save(&image_buf_path);
+            //let flip = image::imageops::flip_vertical(&image_buf);
+
+            bmp::write(fout, &image_buf);
 
             println!("saving image: {}", section_t.stop());
 
@@ -650,6 +658,77 @@ fn main() {
     }
 
     println!("paperboids end");
+}
+
+mod bmp {
+    /// logic from https://github.com/sondrele/rust-bmp
+    extern crate image;
+    extern crate byteorder;
+
+    use std::io::{self, Write};
+    use std::fs::File;
+    use byteorder::{LittleEndian, WriteBytesExt};
+
+    const B: u8 = 66;
+    const M: u8 = 77;
+
+    pub fn write(f: &mut File, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
+        let w = image.width();
+        let h = image.height();
+
+        let header_size = 2 + 12 + 40;
+        let row_size = ((24 as f32 * w as f32 + 31.0) / 32.0).floor() as u32 * 4;
+        let (header_size, data_size) = (header_size, h * row_size);
+
+        let mut bmp_data: Vec<u8> = Vec::with_capacity((header_size + data_size) as usize);
+        write_header(&mut bmp_data, image);
+        write_data(&mut bmp_data, image);
+        f.write_all(&bmp_data).unwrap();
+        f.sync_data().unwrap();
+    }
+
+    pub fn write_header(bmp_data: &mut Vec<u8>, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
+        let w = image.width();
+        let h = image.height();
+
+        let header_size = 2 + 12 + 40;
+        let row_size = ((24 as f32 * w as f32 + 31.0) / 32.0).floor() as u32 * 4;
+        let (header_size, data_size) = (header_size, h * row_size);
+
+        io::Write::write(bmp_data, &[B, M]).unwrap();
+
+        bmp_data.write_u32::<LittleEndian>(header_size + data_size).unwrap();
+        bmp_data.write_u16::<LittleEndian>(0).unwrap(); // creator1
+        bmp_data.write_u16::<LittleEndian>(0).unwrap(); // creator2
+        bmp_data.write_u32::<LittleEndian>(header_size).unwrap(); // pixel_offset
+
+        bmp_data.write_u32::<LittleEndian>(40).unwrap(); // dib_header.header_size));
+        bmp_data.write_i32::<LittleEndian>(w as i32).unwrap(); // dib_header.width));
+        bmp_data.write_i32::<LittleEndian>(h as i32).unwrap(); // dib_header.height));
+        bmp_data.write_u16::<LittleEndian>(1).unwrap();  // num_planes
+        bmp_data.write_u16::<LittleEndian>(24).unwrap(); // bits_per_pixel
+        bmp_data.write_u32::<LittleEndian>(0).unwrap();  // compress_type
+        bmp_data.write_u32::<LittleEndian>(data_size).unwrap();
+        bmp_data.write_i32::<LittleEndian>(1000).unwrap(); // dib_header.hres));
+        bmp_data.write_i32::<LittleEndian>(1000).unwrap(); // dib_header.vres));
+        bmp_data.write_u32::<LittleEndian>(0).unwrap(); // num_colors
+        bmp_data.write_u32::<LittleEndian>(0).unwrap(); // num_imp_colors
+
+    }
+
+    pub fn write_data(bmp_data: &mut Vec<u8>, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
+        // padding is width % 4
+        let w = image.width();
+        let h = image.height();
+        let padding: &[u8] = &[0; 4][0 .. (w % 4) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let px = image.get_pixel(x, y);
+                Write::write(bmp_data, &px.data);
+            }
+            Write::write(bmp_data, padding);
+        }
+    }
 }
 
 fn gl_error() {
