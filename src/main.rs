@@ -64,12 +64,12 @@ fn main() {
     println!("paperboids begin");
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-    let (_width, _height) = (600, 600);
+    let (mut _width, mut _height) = (300, 300);
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
-    glfw.window_hint(glfw::WindowHint::Resizable(false));
+    glfw.window_hint(glfw::WindowHint::Resizable(true));
 
     let (mut window, events) = glfw.create_window(_width, _height, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
@@ -256,6 +256,9 @@ fn main() {
                     unsafe { gl::Viewport(0, 0, w, h); }
                     proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
+                    _width = w as u32;
+                    _height = h as u32;
+                    image_buf = image::ImageBuffer::new(_width, _height);
                 }
 
                 glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
