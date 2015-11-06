@@ -69,7 +69,7 @@ fn main() {
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
-    glfw.window_hint(glfw::WindowHint::Resizable(true));
+    glfw.window_hint(glfw::WindowHint::Resizable(false));
 
     let (mut window, events) = glfw.create_window(_width, _height, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
@@ -110,6 +110,7 @@ fn main() {
 
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
+        gl::ReadBuffer(gl::FRONT); // for glReadPixels
     }
 
     println!("creating shaders");
@@ -226,8 +227,11 @@ fn main() {
     let tm_compute_update = "02.3.u_boid";
     let tm_compute_update_inst = "02.4.u_inst";
     let tm_draw_inst ="03.draw_i";
+    let tm_bmp ="04.0.bmp";
+    let tm_bmp_read ="04.1.r";
+    let tm_bmp_write ="04.2.w";
 
-    let mut pause = true;
+    let mut pause = false;
     let mut debug = false;
     let mut debug_verbose = false;
     let mut enable_octree = false;
@@ -630,7 +634,25 @@ fn main() {
         }
 
         window.swap_buffers();
-        frame_count += 1;
+        // tm.update(tm_frame, frame_t.stop());
+        // frame_total += frame_t.elapsedms();
+
+        // write frame to disk
+        unsafe {
+            compute_t.start();
+            section_t.start();
+            //gl::ReadBuffer(gl::FRONT);
+            gl::ReadPixels(0, 0, _width as i32, _height as i32, gl::BGR, gl::UNSIGNED_BYTE, mem::transmute(image_buf.as_mut_ptr()));
+            tm.update(tm_bmp_read, section_t.stop());
+
+            //let flip = image::imageops::flip_vertical(&image_buf);
+
+            section_t.start();
+            bmp::write(fout, &image_buf);
+            tm.update(tm_bmp_write, section_t.stop());
+            tm.update(tm_bmp, compute_t.stop());
+        }
+
         tm.update(tm_frame, frame_t.stop());
         frame_total += frame_t.elapsedms();
 
@@ -645,94 +667,13 @@ fn main() {
         }
         if debug_verbose { println!("{}: frame end", frame_count); }
 
-        // write frame to disk
-        unsafe {
-            section_t.start();
-            gl::ReadBuffer(gl::FRONT);
-            gl::ReadPixels(0, 0, _width as i32, _height as i32, gl::BGR, gl::UNSIGNED_BYTE, mem::transmute(image_buf.as_mut_ptr()));
 
-            //let flip = image::imageops::flip_vertical(&image_buf);
-
-            bmp::write(fout, &image_buf);
-
-            println!("saving image: {}", section_t.stop());
-
-        }
+        frame_count += 1;
     }
 
     println!("paperboids end");
 }
 
-mod bmp {
-    /// logic from https://github.com/sondrele/rust-bmp
-    extern crate image;
-    extern crate byteorder;
-
-    use std::io::{self, Write};
-    use std::fs::File;
-    use byteorder::{LittleEndian, WriteBytesExt};
-
-    const B: u8 = 66;
-    const M: u8 = 77;
-
-    pub fn write(f: &mut File, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
-        let w = image.width();
-        let h = image.height();
-
-        let header_size = 2 + 12 + 40;
-        let row_size = ((24 as f32 * w as f32 + 31.0) / 32.0).floor() as u32 * 4;
-        let (header_size, data_size) = (header_size, h * row_size);
-
-        let mut bmp_data: Vec<u8> = Vec::with_capacity((header_size + data_size) as usize);
-        write_header(&mut bmp_data, image);
-        write_data(&mut bmp_data, image);
-        f.write_all(&bmp_data).unwrap();
-        f.sync_data().unwrap();
-    }
-
-    pub fn write_header(bmp_data: &mut Vec<u8>, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
-        let w = image.width();
-        let h = image.height();
-
-        let header_size = 2 + 12 + 40;
-        let row_size = ((24 as f32 * w as f32 + 31.0) / 32.0).floor() as u32 * 4;
-        let (header_size, data_size) = (header_size, h * row_size);
-
-        io::Write::write(bmp_data, &[B, M]).unwrap();
-
-        bmp_data.write_u32::<LittleEndian>(header_size + data_size).unwrap();
-        bmp_data.write_u16::<LittleEndian>(0).unwrap(); // creator1
-        bmp_data.write_u16::<LittleEndian>(0).unwrap(); // creator2
-        bmp_data.write_u32::<LittleEndian>(header_size).unwrap(); // pixel_offset
-
-        bmp_data.write_u32::<LittleEndian>(40).unwrap(); // dib_header.header_size));
-        bmp_data.write_i32::<LittleEndian>(w as i32).unwrap(); // dib_header.width));
-        bmp_data.write_i32::<LittleEndian>(h as i32).unwrap(); // dib_header.height));
-        bmp_data.write_u16::<LittleEndian>(1).unwrap();  // num_planes
-        bmp_data.write_u16::<LittleEndian>(24).unwrap(); // bits_per_pixel
-        bmp_data.write_u32::<LittleEndian>(0).unwrap();  // compress_type
-        bmp_data.write_u32::<LittleEndian>(data_size).unwrap();
-        bmp_data.write_i32::<LittleEndian>(1000).unwrap(); // dib_header.hres));
-        bmp_data.write_i32::<LittleEndian>(1000).unwrap(); // dib_header.vres));
-        bmp_data.write_u32::<LittleEndian>(0).unwrap(); // num_colors
-        bmp_data.write_u32::<LittleEndian>(0).unwrap(); // num_imp_colors
-
-    }
-
-    pub fn write_data(bmp_data: &mut Vec<u8>, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
-        // padding is width % 4
-        let w = image.width();
-        let h = image.height();
-        let padding: &[u8] = &[0; 4][0 .. (w % 4) as usize];
-        for y in 0..h {
-            for x in 0..w {
-                let px = image.get_pixel(x, y);
-                Write::write(bmp_data, &px.data);
-            }
-            Write::write(bmp_data, padding);
-        }
-    }
-}
 
 fn gl_error() {
     let er = unsafe { gl::GetError() };
@@ -1109,5 +1050,61 @@ fn single_interact(tc: &TraversalConst, tr: &mut TraversalRecur, o: &Octnode, dv
             tr.colliders += 1;
             tr.r1 = tr.r1 - dv.div_s(d2);
         }
+    }
+}
+
+/// bmp helper module
+/// logic from https://github.com/sondrele/rust-bmp
+mod bmp {
+    extern crate image;
+    extern crate byteorder;
+
+    use std::io::Write;
+    use byteorder::{LittleEndian, WriteBytesExt};
+
+    const B: u8 = 66;
+    const M: u8 = 77;
+
+    /// Write the bmp header and bytes to the given writer
+    pub fn write(w: &mut Write, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
+        write_header(w, image);
+        write_data(w, image);
+    }
+
+    /// Write the bmp header
+    /// TODO: cache this and just re-use the bytes later as it wont change from frame to frame
+    pub fn write_header(w: &mut Write, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
+        let width = image.width();
+        let height = image.height();
+
+        let header_size = 2 + 12 + 40;
+        let row_size = ((24 as f32 * width as f32 + 31.0) / 32.0).floor() as u32 * 4;
+        let (header_size, data_size) = (header_size, height * row_size);
+
+        w.write(&[B, M]).unwrap();
+
+        w.write_u32::<LittleEndian>(header_size + data_size).unwrap();
+        w.write_u16::<LittleEndian>(0).unwrap(); // creator1
+        w.write_u16::<LittleEndian>(0).unwrap(); // creator2
+        w.write_u32::<LittleEndian>(header_size).unwrap(); // pixel_offset
+
+        w.write_u32::<LittleEndian>(40).unwrap(); // dib_header.header_size));
+        w.write_i32::<LittleEndian>(width as i32).unwrap(); // dib_header.width));
+        w.write_i32::<LittleEndian>(height as i32).unwrap(); // dib_header.height));
+        w.write_u16::<LittleEndian>(1).unwrap();  // num_planes
+        w.write_u16::<LittleEndian>(24).unwrap(); // bits_per_pixel
+        w.write_u32::<LittleEndian>(0).unwrap();  // compress_type
+        w.write_u32::<LittleEndian>(data_size).unwrap();
+        w.write_i32::<LittleEndian>(1000).unwrap(); // dib_header.hres));
+        w.write_i32::<LittleEndian>(1000).unwrap(); // dib_header.vres));
+        w.write_u32::<LittleEndian>(0).unwrap(); // num_colors
+        w.write_u32::<LittleEndian>(0).unwrap(); // num_imp_colors
+    }
+
+    /// Write the raw BGR buffer.  Does not insert padding, so make sure the input image's
+    /// width % 4 == 0.
+    pub fn write_data(w: &mut Write, image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>) {
+        // lets assume width is % 4, just write bytes directly
+        w.write_all(&*image).unwrap();
     }
 }
