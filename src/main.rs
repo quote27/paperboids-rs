@@ -15,6 +15,8 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::mem;
 use std::fs::File;
+use std::io::prelude::*;
+use std::net::TcpStream;
 use gl::types::*;
 use glfw::{Action, Context, Key};
 use cgmath::*;
@@ -237,13 +239,20 @@ fn main() {
     let mut enable_octree = false;
     let mut debug_octree_level = 0; // 0: no debug, 1: leaves, 2: nodes, 3: all
     let mut frame_count = 0;
+    let stat_print_interval = 10;
 
     // setup image buffer for saving frames
     let mut image_buf: image::ImageBuffer<image::Rgb<u8>, _> = image::ImageBuffer::new(_width, _height);
-    let image_buf_path = std::path::Path::new("frame.png.pipe");
-    println!("trying to open frame pipe");
-    let ref mut fout = std::fs::File::create(image_buf_path).unwrap();
-    println!("pipe opened");
+
+    // image output logic
+    // let image_buf_path = std::path::Path::new("frame.png.pipe");
+    // println!("trying to open frame pipe");
+    // let ref mut fout = std::fs::File::create(image_buf_path).unwrap();
+    // println!("pipe opened");
+
+    // socket output logic
+    println!("opening tcp socket");
+    let mut tcpstream = TcpStream::connect("localhost:30000").unwrap();
 
     frame_t.start();
     println!("starting main loop");
@@ -644,21 +653,24 @@ fn main() {
             //gl::ReadBuffer(gl::FRONT);
             gl::ReadPixels(0, 0, _width as i32, _height as i32, gl::BGR, gl::UNSIGNED_BYTE, mem::transmute(image_buf.as_mut_ptr()));
             tm.update(tm_bmp_read, section_t.stop());
+            let t_read = section_t.elapsedms();
 
             //let flip = image::imageops::flip_vertical(&image_buf);
 
             section_t.start();
-            bmp::write(fout, &image_buf);
+            bmp::write(&mut tcpstream, &image_buf);
             tm.update(tm_bmp_write, section_t.stop());
             tm.update(tm_bmp, compute_t.stop());
+            let t_write = section_t.elapsedms();
+            //println!("{}, r: {}, w: {}", frame_count, t_read, t_write);
         }
 
         tm.update(tm_frame, frame_t.stop());
         frame_total += frame_t.elapsedms();
 
-        if frame_count % 60 == 0 {
-            tm.avg(60);
-            let frame_avg = frame_total / 60.0;
+        if frame_count % stat_print_interval == 0 {
+            tm.avg(stat_print_interval);
+            let frame_avg = frame_total / stat_print_interval as f64;
             if !pause {
                 println!("{:.2} // {}", frame_avg, tm);
             }
