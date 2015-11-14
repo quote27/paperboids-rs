@@ -8,6 +8,7 @@ pub struct Boid {
     pub pos: Vector3<f32>,
     pub vel: Vector3<f32>,
     pub acc: Vector3<f32>,
+    pub min_speed: f32,
 }
 
 impl Boid {
@@ -27,13 +28,15 @@ impl Boid {
             pos: Vector3::new(x, y, z),
             vel: Vector3::new(vx, vy, vz),
             acc: Vector3::zero(),
+            min_speed: 4.0 * 0.5,
         }
     }
 
     pub fn update(&mut self, dt: f32, world_scale: f32) {
         // TODO: figure out where to put these speed constants
         let max_speed = 25.0 * world_scale;
-        let min_speed = 4.0 * world_scale;
+        //let min_speed = 4.0 * world_scale;
+        let min_speed = self.min_speed;
 
         self.vel = self.vel + self.acc.mul_s(dt);
 

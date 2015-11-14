@@ -86,11 +86,12 @@ fn main() {
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
-    let mut num_boids = 2;
+    let mut num_boids = 1000;
     let mut work_size = num_boids / threads;
 
     let default_weights  = vec![
-        30.0, // avoid obstacles
+        //30.0, // avoid obstacles
+        20.0, // avoid obstacles
         12.0, // collision avoidance
         8.0,  // flock centering
         9.0,  // match velocity
@@ -128,6 +129,7 @@ fn main() {
 
     println!("setting up models");
     let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
+    let pred_model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale * 5.0));
 
     println!("generating {} boids", num_boids);
     let mut bs = Vec::with_capacity(num_boids);
@@ -154,11 +156,14 @@ fn main() {
     // antagonist *later will be a sphere)
     let mut predator_boid = Boid::random_new(&fly_bbox);
     let predator_model_inst = vec![
-        predator_boid.model() * model_default_scale_mat
+        predator_boid.model() * pred_model_default_scale_mat
     ];
     let mut predator_mesh = gen_cube_mesh(&Vector3::new(1.0, 0.0, 0.0));
     predator_mesh.setup(pos_a, color_a, model_inst_a);
     predator_mesh.update_inst(&predator_model_inst);
+    {
+        predator_boid.min_speed = 10.0 * world_scale;
+    }
 
     // other models
     let cube_model_inst = vec![
@@ -435,7 +440,7 @@ fn main() {
                 unsafe {
                     let m = &predator_model_inst[0];
                     let m: &mut Matrix4<f32> = mem::transmute(m);
-                    *m = predator_boid.model() * model_default_scale_mat;
+                    *m = predator_boid.model() * pred_model_default_scale_mat;
                 }
             }
 
@@ -464,7 +469,17 @@ fn main() {
 
                     let mut rules = vec![Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero()];
                     for i in start_id..(start_id + work_size) {
-                        rules[0] = Vector3::zero();
+                        //rules[0] = Vector3::zero();
+                        {
+                            let b = &bs[i];
+                            let disp = predator_pos - b.pos;
+                            let dist2 = disp.length2();
+
+                            if dist2 < look_radius2 {
+                                rules[0] = -disp;
+                                rules[0] = rules[0].mul_s(weights[0]);
+                            }
+                        }
 
                         {
                             let (r1, r2, r3) =
