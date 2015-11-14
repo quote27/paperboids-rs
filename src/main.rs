@@ -151,6 +151,15 @@ fn main() {
     let shared_model_inst = Arc::new(model_inst);
     let shared_octree = Arc::new(octree);
 
+    // antagonist *later will be a sphere)
+    let mut predator_boid = Boid::random_new(&fly_bbox);
+    let predator_model_inst = vec![
+        predator_boid.model() * model_default_scale_mat
+    ];
+    let mut predator_mesh = gen_cube_mesh(&Vector3::new(1.0, 0.0, 0.0));
+    predator_mesh.setup(pos_a, color_a, model_inst_a);
+    predator_mesh.update_inst(&predator_model_inst);
+
     // other models
     let cube_model_inst = vec![
         Matrix4::from_translation(&world_bounds.center()) *
@@ -416,6 +425,22 @@ fn main() {
 
             if debug_verbose { println!("{}: sim start: {} boids", frame_count, shared_bs.len()); }
             section_t.start();
+
+            // move predator
+            {
+                let bounds_v = bounds_v(&predator_boid, &fly_bbox).mul_s(20.0); // weights[4]
+                predator_boid.acc = bounds_v;
+                predator_boid.update(dt, world_scale);
+
+                unsafe {
+                    let m = &predator_model_inst[0];
+                    let m: &mut Matrix4<f32> = mem::transmute(m);
+                    *m = predator_boid.model() * model_default_scale_mat;
+                }
+            }
+
+            let predator_pos = predator_boid.pos;
+
             // simulation run step
             let (tx, rx) = mpsc::channel();
             for tid in 0..threads {
@@ -594,6 +619,7 @@ fn main() {
             if debug_verbose { println!("{}: plane update inst start", frame_count); }
             section_t.start();
             plane_mesh.update_inst(&shared_model_inst);
+            predator_mesh.update_inst(&predator_model_inst);
             tm.update(tm_compute_update_inst, section_t.stop());
             if debug_verbose { println!("{}: plane update inst fin", frame_count); }
         }
@@ -604,6 +630,8 @@ fn main() {
         section_t.start();
         plane_mesh.draw_inst(shared_model_inst.len() as GLint);
         tm.update(tm_draw_inst, section_t.stop());
+
+        predator_mesh.draw_inst(predator_model_inst.len() as GLint);
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
