@@ -38,16 +38,16 @@ impl Boid {
         //let min_speed = 4.0 * world_scale;
         let min_speed = self.min_speed;
 
-        self.vel = self.vel + self.acc.mul_s(dt);
+        self.vel = self.vel + self.acc * dt;
 
         let curr_speed = self.vel.length();
         if curr_speed > max_speed {
-            self.vel = self.vel.mul_s(max_speed / curr_speed);
+            self.vel = self.vel * (max_speed / curr_speed);
         } else if curr_speed < min_speed {
-            self.vel = self.vel.mul_s(min_speed / curr_speed);
+            self.vel = self.vel * (min_speed / curr_speed);
         }
 
-        self.pos = self.pos + self.vel.mul_s(dt);
+        self.pos = self.pos + self.vel * dt;
     }
 
     pub fn model(&self) -> Matrix4<f32> {
@@ -59,11 +59,13 @@ impl Boid {
         let up = Vector3::unit_y();
 
         let dir = dir.normalize();
-        let side = up.cross(&dir).normalize();
-        let up = dir.cross(&side).normalize();
+        let side = up.cross(dir).normalize();
+        let up = dir.cross(side).normalize();
         let m3 = Matrix3::from_cols(side, up, dir);
 
-        Matrix4::from_translation(&self.pos) * Matrix4::from(m3)
+        let test = up * up;
+
+        Matrix4::from_translation(self.pos).mul_m(&Matrix4::from(m3))
     }
 }
 

@@ -51,8 +51,8 @@ impl Octnode {
             boid: -1 as usize,
             bbox: bbox,
             state: OctnodeState::Empty,
-            c: cgmath::zero(),
-            v: cgmath::zero(),
+            c: Vector3::zero(),
+            v: Vector3::zero(),
         }
     }
 
@@ -104,8 +104,8 @@ impl Octree {
             OctnodeState::Empty => { }
             OctnodeState::Leaf => { } // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
             OctnodeState::Node => {
-                let mut c: Vector3<f32> = cgmath::zero();
-                let mut v: Vector3<f32> = cgmath::zero();
+                let mut c: Vector3<f32> = Vector3::zero();
+                let mut v: Vector3<f32> = Vector3::zero();
                 let mut active_children = 0u8;
 
                 for i in 0..8 {
@@ -302,7 +302,7 @@ fn gen_oct_bounds(oct: usize, bbox: &AABB, center: &Vector3<f32>) -> AABB {
             5 => { (Vector3::new(center.x, bbox.l.y, bbox.l.z), Vector3::new(bbox.h.x, center.y, center.z)) }
             6 => { (Vector3::new(bbox.l.x, center.y, bbox.l.z), Vector3::new(center.x, bbox.h.y, center.z)) }
             7 => { (Vector3::new(center.x, center.y, bbox.l.z), Vector3::new(bbox.h.x, bbox.h.y, center.z)) }
-            _ => { (cgmath::zero(), cgmath::zero()) } // TODO: maybe make this a fail! ?
+            _ => { (Vector3::zero(), Vector3::zero()) } // TODO: maybe make this a fail! ?
         };
     AABB::new(lo, hi)
 }

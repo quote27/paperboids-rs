@@ -69,7 +69,8 @@ fn main() {
     let (mut window, events) = glfw.create_window(_width, _height, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
 
-    gl::load_with(|s| window.get_proc_address(s));
+    // TODO: `as *const _` needed to convert glfw's output
+    gl::load_with(|s| window.get_proc_address(s) as *const _);
 
     window.set_key_polling(true);
     window.set_scroll_polling(true);
@@ -139,7 +140,7 @@ fn main() {
 
     let mut model_inst = Vec::with_capacity(bs.len());
     for b in bs.iter() {
-        model_inst.push(b.model() * model_default_scale_mat);
+        model_inst.push(b.model().mul_m(&model_default_scale_mat));
     }
     let mut plane_mesh = gen_paperplane_mesh();
     plane_mesh.setup(pos_a, color_a, model_inst_a);
@@ -156,7 +157,7 @@ fn main() {
     // antagonist *later will be a sphere)
     let mut predator_boid = Boid::random_new(&fly_bbox);
     let predator_model_inst = vec![
-        predator_boid.model() * pred_model_default_scale_mat
+        predator_boid.model().mul_m(&pred_model_default_scale_mat)
     ];
     let mut predator_mesh = gen_cube_mesh(&Vector3::new(1.0, 0.0, 0.0));
     predator_mesh.setup(pos_a, color_a, model_inst_a);
@@ -167,18 +168,18 @@ fn main() {
 
     // other models
     let cube_model_inst = vec![
-        Matrix4::from_translation(&world_bounds.center()) *
-            Matrix4::from(Matrix3::from_value(world_bounds.xlen())),
-        Matrix4::from_translation(&fly_bbox.center()) *
-            Matrix4::from(Matrix3::from_value(fly_bbox.xlen())),
+        Matrix4::from_translation(world_bounds.center())
+            .mul_m(&Matrix4::from(Matrix3::from_value(world_bounds.xlen()))),
+        Matrix4::from_translation(fly_bbox.center())
+            .mul_m(&Matrix4::from(Matrix3::from_value(fly_bbox.xlen()))),
     ];
     let mut cube_mesh = gen_cube_mesh(&Vector3::new(1.0, 1.0, 1.0));
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
     let axis_model_inst = vec![
-        Matrix4::from_translation(&Vector3::new(0.5, 0.5, 0.5)) *
-            Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
+        Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5))
+            .mul_m(&Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0))),
     ];
     let mut axis_mesh = gen_axis_mesh();
     axis_mesh.setup(pos_a, color_a, model_inst_a);
@@ -213,8 +214,8 @@ fn main() {
 
     let mut proj_m4 = perspective(deg(45.0), _width as f32 / _height as f32, 0.01, 1000.0);
     let eye = Point3::new(world_bounds.h.x * 2.0, world_bounds.h.y * 1.5, world_bounds.h.z * 2.0);
-    let target = Point3::from_vec(&world_bounds.center());
-    let mut view_m4 = Matrix4::look_at(&eye, &target, &Vector3::unit_y());
+    let target = Point3::from_vec(world_bounds.center());
+    let mut view_m4 = Matrix4::look_at(eye, target, Vector3::unit_y());
 
     proj_u.upload_m4f(&proj_m4);
     view_u.upload_m4f(&view_m4);
@@ -323,7 +324,7 @@ fn main() {
 
                         for _ in 0..num_add {
                             let b = Boid::random_new(&fly_bbox);
-                            msmi.push(b.model() * model_default_scale_mat);
+                            msmi.push(b.model().mul_m(&model_default_scale_mat));
                             mbs.push(b);
                         }
                     }
@@ -364,11 +365,11 @@ fn main() {
             let dir = eye2d - target2d;
 
             let rot2d: Basis2<f32> = Rotation2::from_angle(horiz_view_angle.into());
-            let new_dir = rot2d.rotate_vector(&dir);
+            let new_dir = rot2d.rotate_vector(dir);
 
             let new_eye2d = target2d + new_dir;
             let new_eye3d = Point3::new(new_eye2d.x, vert_view_height, new_eye2d.y);
-            view_m4 = Matrix4::look_at(&new_eye3d, &target, &Vector3::unit_y());
+            view_m4 = Matrix4::look_at(new_eye3d, target, Vector3::unit_y());
             view_u.upload_m4f(&view_m4);
         }
         tm.update(tm_events, section_t.stop());
@@ -415,8 +416,8 @@ fn main() {
 
                         if draw {
                             debug_octree_inst.push(
-                                Matrix4::from_translation(&o.bbox.center()) *
-                                Matrix4::from(Matrix3::from_value(o.bbox.xlen()))
+                                Matrix4::from_translation(o.bbox.center())
+                                    .mul_m(&Matrix4::from(Matrix3::from_value(o.bbox.xlen())))
                                 );
                         }
                     }
@@ -433,14 +434,14 @@ fn main() {
 
             // move predator
             {
-                let bounds_v = bounds_v(&predator_boid, &fly_bbox).mul_s(20.0); // weights[4]
+                let bounds_v = bounds_v(&predator_boid, &fly_bbox) * 20.0; // weights[4]
                 predator_boid.acc = bounds_v;
                 predator_boid.update(dt, world_scale);
 
                 unsafe {
                     let m = &predator_model_inst[0];
                     let m: &mut Matrix4<f32> = mem::transmute(m);
-                    *m = predator_boid.model() * pred_model_default_scale_mat;
+                    *m = predator_boid.model().mul_m(&pred_model_default_scale_mat);
                 }
             }
 
@@ -477,7 +478,7 @@ fn main() {
 
                             if dist2 < look_radius2 {
                                 rules[0] = -disp;
-                                rules[0] = rules[0].mul_s(weights[0]);
+                                rules[0] = rules[0] * weights[0];
                             }
                         }
 
@@ -560,7 +561,7 @@ fn main() {
 
                             let m = &model_inst[i];
                             let m: &mut Matrix4<f32> = mem::transmute(m);
-                            *m = b.model() * model_default_scale_mat;
+                            *m = b.model().mul_m(&model_default_scale_mat);
                         }
                     }
 
@@ -603,10 +604,10 @@ fn main() {
                     let dir = dir.normalize();
                     let pos_dir = pos + dir;
 
-                    let side = up.cross(&dir).normalize();
+                    let side = up.cross(dir).normalize();
                     let pos_side = pos + side;
 
-                    let up = dir.cross(&side).normalize();
+                    let up = dir.cross(side).normalize();
                     let pos_up = pos + up;
 
                     // lookat forward/dir vector
