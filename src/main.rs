@@ -298,12 +298,12 @@ fn main() {
                     }
                 }
 
-                glfw::WindowEvent::Key(Key::Left, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, _)=> {
-                    horiz_view_angle = horiz_view_angle + deg(180.0);
+                glfw::WindowEvent::Key(Key::Left, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, mode)=> {
+                    horiz_view_angle += if mode.contains(glfw::Shift) { deg(5.0) } else { deg(1.0) };
                     view_update = true;
                 }
-                glfw::WindowEvent::Key(Key::Right, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, _) => {
-                    horiz_view_angle = horiz_view_angle - deg(180.0);
+                glfw::WindowEvent::Key(Key::Right, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, mode) => {
+                    horiz_view_angle -= if mode.contains(glfw::Shift) { deg(5.0) } else { deg(1.0) };
                     view_update = true;
                 }
 
