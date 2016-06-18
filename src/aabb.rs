@@ -1,6 +1,6 @@
 extern crate cgmath;
 
-use cgmath::{Vector, Vector3};
+use cgmath::Vector3;
 use std::fmt;
 
 /// An axis aligned bounding box.  Uses cgmath's Vector3<f32>.
@@ -58,7 +58,7 @@ impl AABB {
     /// Returns a Vector3<f32> representing the center of the box.
     pub fn center(&self) -> Vector3<f32> {
         // have to do tricks to convert from points to vectors
-        self.l + (self.h - self.l).mul_s(0.5)
+        self.l + (self.h - self.l) * 0.5
     }
 
     /// Scales the aabb relative to the lower point.
@@ -73,7 +73,7 @@ impl AABB {
         let center = self.center();
         self.scale(scale);
 
-        let diffv = center - center.mul_s(scale);
+        let diffv = center - center * scale;
         self.trans(&diffv);
     }
 

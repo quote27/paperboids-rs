@@ -5,4 +5,4 @@ Small [boids](http://www.red3d.com/cwr/boids/) implementation using paper airpla
 Using as a test bed to learn Rust / dive into OpenGL + Shaders / fiddle around with parallelism.
 
 Last successful compile on:
-rustc 1.7.0-nightly (81dd3824f 2015-12-11)
+rustc 1.11.0-nightly (bb4a79b08 2016-06-15)

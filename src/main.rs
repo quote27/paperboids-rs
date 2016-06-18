@@ -1,4 +1,3 @@
-#![feature(negate_unsigned)]
 #![allow(mutable_transmutes)]
 extern crate gl;
 extern crate glfw;
@@ -10,6 +9,7 @@ use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::mem;
+use std::usize;
 use gl::types::*;
 use glfw::{Action, Context, Key};
 use cgmath::*;
@@ -140,7 +140,7 @@ fn main() {
 
     let mut model_inst = Vec::with_capacity(bs.len());
     for b in bs.iter() {
-        model_inst.push(b.model().mul_m(&model_default_scale_mat));
+        model_inst.push(b.model() * model_default_scale_mat);
     }
     let mut plane_mesh = gen_paperplane_mesh();
     plane_mesh.setup(pos_a, color_a, model_inst_a);
@@ -157,7 +157,7 @@ fn main() {
     // antagonist *later will be a sphere)
     let mut predator_boid = Boid::random_new(&fly_bbox);
     let predator_model_inst = vec![
-        predator_boid.model().mul_m(&pred_model_default_scale_mat)
+        predator_boid.model() * pred_model_default_scale_mat
     ];
     let mut predator_mesh = gen_cube_mesh(&Vector3::new(1.0, 0.0, 0.0));
     predator_mesh.setup(pos_a, color_a, model_inst_a);
@@ -168,18 +168,18 @@ fn main() {
 
     // other models
     let cube_model_inst = vec![
-        Matrix4::from_translation(world_bounds.center())
-            .mul_m(&Matrix4::from(Matrix3::from_value(world_bounds.xlen()))),
-        Matrix4::from_translation(fly_bbox.center())
-            .mul_m(&Matrix4::from(Matrix3::from_value(fly_bbox.xlen()))),
+        Matrix4::from_translation(world_bounds.center()) *
+            Matrix4::from(Matrix3::from_value(world_bounds.xlen())),
+        Matrix4::from_translation(fly_bbox.center()) *
+            Matrix4::from(Matrix3::from_value(fly_bbox.xlen())),
     ];
     let mut cube_mesh = gen_cube_mesh(&Vector3::new(1.0, 1.0, 1.0));
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
     let axis_model_inst = vec![
-        Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5))
-            .mul_m(&Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0))),
+        Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5)) *
+            Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
     ];
     let mut axis_mesh = gen_axis_mesh();
     axis_mesh.setup(pos_a, color_a, model_inst_a);
@@ -324,7 +324,7 @@ fn main() {
 
                         for _ in 0..num_add {
                             let b = Boid::random_new(&fly_bbox);
-                            msmi.push(b.model().mul_m(&model_default_scale_mat));
+                            msmi.push(b.model() * model_default_scale_mat);
                             mbs.push(b);
                         }
                     }
@@ -416,8 +416,8 @@ fn main() {
 
                         if draw {
                             debug_octree_inst.push(
-                                Matrix4::from_translation(o.bbox.center())
-                                    .mul_m(&Matrix4::from(Matrix3::from_value(o.bbox.xlen())))
+                                Matrix4::from_translation(o.bbox.center()) *
+                                    Matrix4::from(Matrix3::from_value(o.bbox.xlen()))
                                 );
                         }
                     }
@@ -441,7 +441,7 @@ fn main() {
                 unsafe {
                     let m = &predator_model_inst[0];
                     let m: &mut Matrix4<f32> = mem::transmute(m);
-                    *m = predator_boid.model().mul_m(&pred_model_default_scale_mat);
+                    *m = predator_boid.model() * pred_model_default_scale_mat;
                 }
             }
 
@@ -474,7 +474,7 @@ fn main() {
                         {
                             let b = &bs[i];
                             let disp = predator_pos - b.pos;
-                            let dist2 = disp.length2();
+                            let dist2 = disp.magnitude2();
 
                             if dist2 < look_radius2 {
                                 rules[0] = -disp;
@@ -489,25 +489,25 @@ fn main() {
                                 } else {
                                     calc_rules(&bs, i, look_radius2, collide_radius2)
                                 };
-                            rules[1] = r1.mul_s(weights[1]);
-                            rules[2] = r2.mul_s(weights[2]);
-                            rules[3] = r3.mul_s(weights[3]);
+                            rules[1] = r1 * weights[1];
+                            rules[2] = r2 * weights[2];
+                            rules[3] = r3 * weights[3];
 
-                            rules[4] = bounds_v(&bs[i], &fly_bbox).mul_s(weights[4]);
+                            rules[4] = bounds_v(&bs[i], &fly_bbox) * weights[4];
                         }
 
                         let mut mag = 0.0;
                         let mut acc = Vector3::zero();
 
                         for r in rules.iter() {
-                            let m = r.length();
+                            let m = r.magnitude();
 
                             // TODO: change this to epsilon
                             if m == 0.0 { continue; }
 
                             if mag + m > max_mag {
                                 // rebalance last rule
-                                let r = r.mul_s((max_mag - mag) / m);
+                                let r = r * ((max_mag - mag) / m);
                                 acc = acc + r;
                                 break;
                             }
@@ -561,7 +561,7 @@ fn main() {
 
                             let m = &model_inst[i];
                             let m: &mut Matrix4<f32> = mem::transmute(m);
-                            *m = b.model().mul_m(&model_default_scale_mat);
+                            *m = b.model() * model_default_scale_mat;
                         }
                     }
 
@@ -896,9 +896,10 @@ fn bounds_v(b: &Boid, bbox: &AABB) -> Vector3<f32> {
         };
 
     if bounds != Vector3::zero() {
-        bounds.normalize_self();
+        bounds.normalize()
+    } else {
+        bounds
     }
-    bounds
 }
 
 //
@@ -920,7 +921,7 @@ fn calc_rules(bs: &Vec<Boid>, bi: usize, look_radius2: f32, collide_radius2: f32
         let o = &bs[j];
 
         let disp = o.pos - b.pos;
-        let dist2 = disp.length2();
+        let dist2 = disp.magnitude2();
 
         if dist2 < look_radius2 {
             neighbors += 1;
@@ -934,18 +935,18 @@ fn calc_rules(bs: &Vec<Boid>, bi: usize, look_radius2: f32, collide_radius2: f32
             // avoid others
             if dist2 < collide_radius2 {
                 colliders += 1;
-                r1 = r1 - (disp.div_s(dist2));
+                r1 = r1 - (disp / dist2);
             }
         }
     }
 
     if neighbors > 0 {
-        r2 = r2.div_s(neighbors as f32) - b.pos;
-        r2.normalize_self();
-        r3.normalize_self();
+        r2 = r2 / (neighbors as f32) - b.pos;
+        r2 = r2.normalize();
+        r3 = r3.normalize();
     }
     if colliders > 0 {
-        r1.normalize_self();
+        r1 = r1.normalize();
     }
     (r1, r2, r3)
 }
@@ -996,16 +997,16 @@ fn calc_rules_octree(bs: &Vec<Boid>, boid_id: usize, octree: &Octree, look_radiu
         small_nodes: 0,
     };
 
-    if tc.octree.root != -1 as usize {
+    if tc.octree.root != usize::MAX {
         traverse_octree(&tc, &mut tr, tc.octree.root);
     }
 
     if tr.neighbors > 0 {
-        tr.r2 = (tr.r2.div_s(tr.neighbors as f32) - b.pos).normalize();
-        tr.r3.normalize_self();
+        tr.r2 = (tr.r2 / (tr.neighbors as f32) - b.pos).normalize();
+        tr.r3 = tr.r3.normalize();
     }
     if tr.colliders > 0 {
-        tr.r1.normalize_self();
+        tr.r1 = tr.r1.normalize();
     }
 
     //println!("leaves: {}, nodes: {}, small node: {}", tr.leaves, tr.nodes, tr.small_nodes);
@@ -1015,7 +1016,7 @@ fn calc_rules_octree(bs: &Vec<Boid>, boid_id: usize, octree: &Octree, look_radiu
 fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: usize) {
     let o = tc.octree.get_node(curr);
     let dv = o.c - tc.b.pos;
-    let d = dv.length();
+    let d = dv.magnitude();
 
     if o.is_leaf() {
         if d < 1e-6 { return } // skip self
@@ -1033,7 +1034,7 @@ fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: usize) {
     } else {
         for i in 0..8 {
             let child_id = o.child[i];
-            if child_id != -1 as usize {
+            if child_id != usize::MAX {
                 traverse_octree(tc, tr, child_id);
             }
         }
@@ -1051,7 +1052,7 @@ fn single_interact(tc: &TraversalConst, tr: &mut TraversalRecur, o: &Octnode, dv
 
         if d2 < tc.collide_radius2 {
             tr.colliders += 1;
-            tr.r1 = tr.r1 - dv.div_s(d2);
+            tr.r1 = tr.r1 - dv / d2;
         }
     }
 }

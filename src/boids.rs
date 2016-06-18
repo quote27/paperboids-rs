@@ -40,7 +40,7 @@ impl Boid {
 
         self.vel = self.vel + self.acc * dt;
 
-        let curr_speed = self.vel.length();
+        let curr_speed = self.vel.magnitude();
         if curr_speed > max_speed {
             self.vel = self.vel * (max_speed / curr_speed);
         } else if curr_speed < min_speed {
@@ -63,9 +63,7 @@ impl Boid {
         let up = dir.cross(side).normalize();
         let m3 = Matrix3::from_cols(side, up, dir);
 
-        let test = up * up;
-
-        Matrix4::from_translation(self.pos).mul_m(&Matrix4::from(m3))
+        Matrix4::from_translation(self.pos) * Matrix4::from(m3)
     }
 }
 

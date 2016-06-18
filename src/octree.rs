@@ -1,8 +1,9 @@
 extern crate cgmath;
 
-use cgmath::{Vector, Vector3};
+use cgmath::{Vector3, Zero};
 use aabb::AABB;
 use boids::Boid;
+use std::usize;
 
 
 /// Enum representing the Octnode's state.
@@ -34,7 +35,7 @@ impl Octnode {
     fn new(parent: usize, bbox: AABB, boid_id: usize, b: &Boid) -> Octnode {
         Octnode {
             parent: parent,
-            child: [-1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize],
+            child: [usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX],
             boid: boid_id,
             bbox: bbox,
             state: OctnodeState::Leaf,
@@ -46,9 +47,9 @@ impl Octnode {
     /// Creates an empty node with a bounding box - this is used to initialize the root of a blank tree.
     fn empty(bbox: AABB) -> Octnode {
         Octnode {
-            parent: -1 as usize,
-            child: [-1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize],
-            boid: -1 as usize,
+            parent: usize::MAX,
+            child: [usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX],
+            boid: usize::MAX,
             bbox: bbox,
             state: OctnodeState::Empty,
             c: Vector3::zero(),
@@ -111,7 +112,7 @@ impl Octree {
                 for i in 0..8 {
                     let child_id = self.pool[curr_id].child[i];
 
-                    if child_id != -1 as usize {
+                    if child_id != usize::MAX {
                         let child_state = self.pool[child_id].state;
                         match child_state {
                             OctnodeState::Node => self.update_recur(child_id, bs),
@@ -125,8 +126,8 @@ impl Octree {
                     }
                 }
                 //TODO: verify: if state is node, there has to be at least one child, so can't have a divide by 0
-                c = c.div_s(active_children as f32);
-                v = v.div_s(active_children as f32);
+                c = c / (active_children as f32);
+                v = v / (active_children as f32);
                 let o = &mut self.pool[curr_id]; // update the node's averages
                 o.c = c;
                 o.v = v;
@@ -147,7 +148,7 @@ impl Octree {
         let root_bbox = self.pool[0].bbox;
         for i in 0..bs.len() {
             // println!("inserting {}: {}", i, bs[i]);
-            self.insert_recur(root, -1 as usize, bs, i, &root_bbox, 0);
+            self.insert_recur(root, usize::MAX, bs, i, &root_bbox, 0);
         }
     }
 
@@ -157,7 +158,7 @@ impl Octree {
         for _ in 0..recur { space.push_str("  "); }
         // println!("{}ir: boid: {}, curr: {}, parent: {}", space, boid_id, curr_id, parent_id);
 
-        if curr_id == -1 as usize {
+        if curr_id == usize::MAX {
             //println!("null node, pulling from pool");
             self.pool.push(Octnode::new(parent_id, *bbox, boid_id, &bs[boid_id]));
 
@@ -198,7 +199,7 @@ impl Octree {
 
                         let on = &mut self.pool[curr_id];
                         on.child[new_oct] = new_child_id;
-                        on.boid = -1;
+                        on.boid = usize::MAX;
                         on.state = OctnodeState::Node;
                     }
 
@@ -252,7 +253,7 @@ impl Octree {
     }
 
     fn print_recur(&self, curr_id: usize, oct: usize, recur: usize) {
-        if curr_id == -1 as usize {
+        if curr_id == usize::MAX {
             return;
         }
 
