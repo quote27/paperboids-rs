@@ -283,12 +283,18 @@ fn main() {
 
                 glfw::WindowEvent::Scroll(xoff, yoff) => {
                     let off_epsilon = 0.15;
-                    let xoff = xoff as f32;
-                    let yoff = yoff as f32;
-                    if debug_verbose { println!("{}: scroll: x: {}, y: {}", frame_count, xoff, yoff); }
+                    let shift = window.get_key(Key::LeftShift) == Action::Press;
+                    let (xoff, yoff) =
+                        if !shift {
+                            (xoff as f32, yoff as f32)
+                        } else {
+                            (yoff as f32, xoff as f32)
+                        };
+
+                    if debug_verbose { println!("{}: {} scroll: x: {}, y: {}", frame_count, if shift { "reverse" } else { "" }, xoff, yoff); }
 
                     if xoff.abs() > off_epsilon {
-                        horiz_view_angle = horiz_view_angle + deg(180.0 * xoff);
+                        horiz_view_angle = horiz_view_angle + deg(2.0 * xoff);
                         view_update = true;
                     }
 
