@@ -1,8 +1,9 @@
 extern crate cgmath;
 
-use cgmath::{Vector, Vector3};
+use cgmath::{Vector3, Zero};
 use aabb::AABB;
 use boids::Boid;
+use std::usize;
 
 
 /// Enum representing the Octnode's state.
@@ -34,7 +35,7 @@ impl Octnode {
     fn new(parent: usize, bbox: AABB, boid_id: usize, b: &Boid) -> Octnode {
         Octnode {
             parent: parent,
-            child: [-1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize],
+            child: [usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX],
             boid: boid_id,
             bbox: bbox,
             state: OctnodeState::Leaf,
@@ -46,13 +47,13 @@ impl Octnode {
     /// Creates an empty node with a bounding box - this is used to initialize the root of a blank tree.
     fn empty(bbox: AABB) -> Octnode {
         Octnode {
-            parent: -1 as usize,
-            child: [-1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize, -1 as usize],
-            boid: -1 as usize,
+            parent: usize::MAX,
+            child: [usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX],
+            boid: usize::MAX,
             bbox: bbox,
             state: OctnodeState::Empty,
-            c: cgmath::zero(),
-            v: cgmath::zero(),
+            c: Vector3::zero(),
+            v: Vector3::zero(),
         }
     }
 
@@ -104,14 +105,14 @@ impl Octree {
             OctnodeState::Empty => { }
             OctnodeState::Leaf => { } // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
             OctnodeState::Node => {
-                let mut c: Vector3<f32> = cgmath::zero();
-                let mut v: Vector3<f32> = cgmath::zero();
+                let mut c: Vector3<f32> = Vector3::zero();
+                let mut v: Vector3<f32> = Vector3::zero();
                 let mut active_children = 0u8;
 
                 for i in 0..8 {
                     let child_id = self.pool[curr_id].child[i];
 
-                    if child_id != -1 as usize {
+                    if child_id != usize::MAX {
                         let child_state = self.pool[child_id].state;
                         match child_state {
                             OctnodeState::Node => self.update_recur(child_id, bs),
@@ -125,8 +126,8 @@ impl Octree {
                     }
                 }
                 //TODO: verify: if state is node, there has to be at least one child, so can't have a divide by 0
-                c = c.div_s(active_children as f32);
-                v = v.div_s(active_children as f32);
+                c = c / (active_children as f32);
+                v = v / (active_children as f32);
                 let o = &mut self.pool[curr_id]; // update the node's averages
                 o.c = c;
                 o.v = v;
@@ -147,7 +148,7 @@ impl Octree {
         let root_bbox = self.pool[0].bbox;
         for i in 0..bs.len() {
             // println!("inserting {}: {}", i, bs[i]);
-            self.insert_recur(root, -1 as usize, bs, i, &root_bbox, 0);
+            self.insert_recur(root, usize::MAX, bs, i, &root_bbox, 0);
         }
     }
 
@@ -157,7 +158,7 @@ impl Octree {
         for _ in 0..recur { space.push_str("  "); }
         // println!("{}ir: boid: {}, curr: {}, parent: {}", space, boid_id, curr_id, parent_id);
 
-        if curr_id == -1 as usize {
+        if curr_id == usize::MAX {
             //println!("null node, pulling from pool");
             self.pool.push(Octnode::new(parent_id, *bbox, boid_id, &bs[boid_id]));
 
@@ -198,7 +199,7 @@ impl Octree {
 
                         let on = &mut self.pool[curr_id];
                         on.child[new_oct] = new_child_id;
-                        on.boid = -1;
+                        on.boid = usize::MAX;
                         on.state = OctnodeState::Node;
                     }
 
@@ -252,7 +253,7 @@ impl Octree {
     }
 
     fn print_recur(&self, curr_id: usize, oct: usize, recur: usize) {
-        if curr_id == -1 as usize {
+        if curr_id == usize::MAX {
             return;
         }
 
@@ -302,7 +303,7 @@ fn gen_oct_bounds(oct: usize, bbox: &AABB, center: &Vector3<f32>) -> AABB {
             5 => { (Vector3::new(center.x, bbox.l.y, bbox.l.z), Vector3::new(bbox.h.x, center.y, center.z)) }
             6 => { (Vector3::new(bbox.l.x, center.y, bbox.l.z), Vector3::new(center.x, bbox.h.y, center.z)) }
             7 => { (Vector3::new(center.x, center.y, bbox.l.z), Vector3::new(bbox.h.x, bbox.h.y, center.z)) }
-            _ => { (cgmath::zero(), cgmath::zero()) } // TODO: maybe make this a fail! ?
+            _ => { (Vector3::zero(), Vector3::zero()) } // TODO: maybe make this a fail! ?
         };
     AABB::new(lo, hi)
 }
