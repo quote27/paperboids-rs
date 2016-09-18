@@ -177,6 +177,31 @@ fn main() {
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
+    let mut ground_model_inst = vec![];
+    //let mut ground_grid_offsets = vec![];
+    {
+        use rand::Rng;
+        let ground_divide = 10.0;
+        let rand_range = 10.0;
+        let gdi = ground_divide as isize;
+        let mut rand = rand::weak_rng();
+        for i in 0..gdi {
+            let xx = (world_bounds.xlen() / ground_divide) * (i as f32);
+            for j in 0..gdi {
+                let zz = (world_bounds.xlen() / ground_divide) * (j as f32);
+                let yoff = rand_range / 2.0 - rand.next_f32() * rand_range;
+                //ground_grid_offsets.push(yoff);
+                ground_model_inst.push(
+                    Matrix4::from_translation(Vector3::new(xx, yoff, zz)) *
+                    Matrix4::from(Matrix3::from_value(world_bounds.xlen() / ground_divide))
+                    );
+            }
+        }
+    }
+    let mut ground_mesh = gen_square_mesh();
+    ground_mesh.setup(pos_a, color_a, model_inst_a);
+    ground_mesh.update_inst(&ground_model_inst);
+
     let axis_model_inst = vec![
         Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5)) *
             Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
@@ -208,11 +233,11 @@ fn main() {
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
-    let mut horiz_view_angle = deg(0.0f32);
+    let mut horiz_view_angle = Deg(0.0f32);
     let mut vert_view_height = world_bounds.h.y * 1.5;
     let mut view_update = true;
 
-    let mut proj_m4 = perspective(deg(45.0), _width as f32 / _height as f32, 0.01, 1000.0);
+    let mut proj_m4 = perspective(Deg(45.0), _width as f32 / _height as f32, 0.01, 1000.0);
     let eye = Point3::new(world_bounds.h.x * 2.0, world_bounds.h.y * 1.5, world_bounds.h.z * 2.0);
     let target = Point3::from_vec(world_bounds.center());
     let mut view_m4 = Matrix4::look_at(eye, target, Vector3::unit_y());
@@ -257,7 +282,7 @@ fn main() {
             match event {
                 glfw::WindowEvent::FramebufferSize(w, h) => {
                     unsafe { gl::Viewport(0, 0, w, h); }
-                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
+                    proj_m4 = perspective(Deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
                 }
 
@@ -288,7 +313,7 @@ fn main() {
                     if debug_verbose { println!("{}: scroll: x: {}, y: {}", frame_count, xoff, yoff); }
 
                     if xoff.abs() > off_epsilon {
-                        horiz_view_angle = horiz_view_angle + deg(180.0 * xoff);
+                        horiz_view_angle = horiz_view_angle + Deg(180.0 * xoff);
                         view_update = true;
                     }
 
@@ -299,11 +324,11 @@ fn main() {
                 }
 
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, mode)=> {
-                    horiz_view_angle += if mode.contains(glfw::Shift) { deg(5.0) } else { deg(1.0) };
+                    horiz_view_angle += if mode.contains(glfw::Shift) { Deg(5.0) } else { Deg(1.0) };
                     view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, mode) => {
-                    horiz_view_angle -= if mode.contains(glfw::Shift) { deg(5.0) } else { deg(1.0) };
+                    horiz_view_angle -= if mode.contains(glfw::Shift) { Deg(5.0) } else { Deg(1.0) };
                     view_update = true;
                 }
 
@@ -364,7 +389,7 @@ fn main() {
             let eye2d = Vector2::new(eye.x, eye.z);
             let dir = eye2d - target2d;
 
-            let rot2d: Basis2<f32> = Rotation2::from_angle(horiz_view_angle.into());
+            let rot2d: Basis2<f32> = Rotation2::from_angle(horiz_view_angle);
             let new_dir = rot2d.rotate_vector(dir);
 
             let new_eye2d = target2d + new_dir;
@@ -651,6 +676,7 @@ fn main() {
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
+        ground_mesh.draw_inst(ground_model_inst.len() as GLint);
         if debug {
             debug_lines_mesh.draw_inst(debug_lines_inst.len() as GLint);
         }
@@ -719,16 +745,18 @@ fn gen_paperplane_mesh() -> Mesh {
 }
 
 fn gen_square_mesh() -> Mesh {
+    // x-z square
     let vertices = vec![
         // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
-        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+        0.0,  0.0,  0.0, 0.5, 0.5, 0.5f32,
+        1.0,  0.0,  0.0, 0.5, 0.5, 0.5f32,
+        1.0,  0.0,  1.0, 0.5, 0.5, 0.5f32,
+        0.0,  0.0,  1.0, 0.5, 0.5, 0.5f32,
     ];
     let vertex_size = 6;
-    let elements = vec![ 0u32, 1, 2, 3, ];
-    Mesh::new("square", vertices, elements, vertex_size, gl::LINE_LOOP)
+    //let elements = vec![ 0u32, 1, 2, 3, ]; // gl::LINES
+    let elements = vec![ 0u32, 1, 2, 0, 2, 3, ];
+    Mesh::new("square", vertices, elements, vertex_size, gl::TRIANGLES)
 }
 
 fn gen_axis_mesh() -> Mesh {
