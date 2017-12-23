@@ -109,30 +109,25 @@ fn main() {
         gl::Enable(gl::DEPTH_TEST);
     }
 
-    println!("creating shaders");
     let shaders_v = vec![
         Shader::from_str(gl::VERTEX_SHADER, &VS_SRC),
         Shader::from_str(gl::FRAGMENT_SHADER, &FS_SRC),
     ];
     gl_error_str("shaders created");
 
-    println!("creating program");
     let prog = Program::new(&shaders_v);
     gl_error_str("program created");
 
 
-    println!("use program");
     prog.use_prog();
     let pos_a = prog.get_attrib("position") as GLuint;
     let color_a = prog.get_attrib("color") as GLuint;
     let model_inst_a = prog.get_attrib("model_inst") as GLuint;
 
 
-    println!("setting up models");
     let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
     let pred_model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale * 5.0));
 
-    println!("generating {} boids", num_boids);
     let mut bs = Vec::with_capacity(num_boids);
     for _ in 0..num_boids {
         bs.push(Boid::random_new(&fly_bbox))
@@ -146,10 +141,8 @@ fn main() {
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
 
-    println!("setting up octree");
     let octree = Octree::new(world_bounds);
 
-    println!("setting up arc wrappers for: bs, model_inst, octree");
     let shared_bs = Arc::new(bs);
     let shared_model_inst = Arc::new(model_inst);
     let shared_octree = Arc::new(octree);
@@ -203,16 +196,15 @@ fn main() {
     debug_octree_mesh.update_inst(&debug_octree_inst);
 
 
-    println!("setting up uniforms");
     let alpha_u = prog.get_unif("alpha");
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
 
-    let mut horiz_view_angle = deg(0.0f32);
+    let mut horiz_view_angle = Deg(0.0f32);
     let mut vert_view_height = world_bounds.h.y * 1.5;
     let mut view_update = true;
 
-    let mut proj_m4 = perspective(deg(45.0), _width as f32 / _height as f32, 0.01, 1000.0);
+    let mut proj_m4 = perspective(Deg(45.0), _width as f32 / _height as f32, 0.01, 1000.0);
     let eye = Point3::new(world_bounds.h.x * 2.0, world_bounds.h.y * 1.5, world_bounds.h.z * 2.0);
     let target = Point3::from_vec(world_bounds.center());
     let mut view_m4 = Matrix4::look_at(eye, target, Vector3::unit_y());
@@ -221,7 +213,6 @@ fn main() {
     view_u.upload_m4f(&view_m4);
     alpha_u.upload_1f(1.0);
 
-    println!("setting up timers");
     let mut tm = TimeMap::new();
     let mut frame_t = Timer::new();
     let mut section_t = Timer::new();
@@ -245,19 +236,20 @@ fn main() {
     let mut frame_count = 0;
 
     frame_t.start();
-    println!("starting main loop");
     while !window.should_close() {
         if debug_verbose { println!("{}: frame start", frame_count); }
         let tlastframe = frame_t.stop();
         frame_t.start();
 
         section_t.start(); // events
+        if debug_verbose { println!("{}: glfw calling poll_events", frame_count); }
         glfw.poll_events();
+        if debug_verbose { println!("{}: glfw returned from poll_events", frame_count); }
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::FramebufferSize(w, h) => {
                     unsafe { gl::Viewport(0, 0, w, h); }
-                    proj_m4 = perspective(deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
+                    proj_m4 = perspective(Deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
                 }
 
@@ -294,7 +286,7 @@ fn main() {
                     if debug_verbose { println!("{}: {} scroll: x: {}, y: {}", frame_count, if shift { "reverse" } else { "" }, xoff, yoff); }
 
                     if xoff.abs() > off_epsilon {
-                        horiz_view_angle = horiz_view_angle + deg(2.0 * xoff);
+                        horiz_view_angle = horiz_view_angle + Deg(2.0 * xoff);
                         view_update = true;
                     }
 
@@ -363,6 +355,8 @@ fn main() {
             }
         }
 
+        if debug_verbose { println!("{}: event parse", frame_count); }
+
         if view_update {
             view_update = false;
 
@@ -370,7 +364,7 @@ fn main() {
             let eye2d = Vector2::new(eye.x, eye.z);
             let dir = eye2d - target2d;
 
-            let rot2d: Basis2<f32> = Rotation2::from_angle(horiz_view_angle.into());
+            let rot2d: Basis2<f32> = Rotation2::<f32>::from_angle(horiz_view_angle);
             let new_dir = rot2d.rotate_vector(dir);
 
             let new_eye2d = target2d + new_dir;
