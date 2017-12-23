@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::mem;
 use std::usize;
 use gl::types::*;
-use glfw::{Action, Context, Key};
+use glfw::{Action, Context, Key, Modifiers};
 use cgmath::*;
 use shaders::{Shader, Program};
 use mesh::Mesh;
@@ -109,30 +109,25 @@ fn main() {
         gl::Enable(gl::DEPTH_TEST);
     }
 
-    println!("creating shaders");
     let shaders_v = vec![
         Shader::from_str(gl::VERTEX_SHADER, &VS_SRC),
         Shader::from_str(gl::FRAGMENT_SHADER, &FS_SRC),
     ];
     gl_error_str("shaders created");
 
-    println!("creating program");
     let prog = Program::new(&shaders_v);
     gl_error_str("program created");
 
 
-    println!("use program");
     prog.use_prog();
     let pos_a = prog.get_attrib("position") as GLuint;
     let color_a = prog.get_attrib("color") as GLuint;
     let model_inst_a = prog.get_attrib("model_inst") as GLuint;
 
 
-    println!("setting up models");
     let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
     let pred_model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale * 5.0));
 
-    println!("generating {} boids", num_boids);
     let mut bs = Vec::with_capacity(num_boids);
     for _ in 0..num_boids {
         bs.push(Boid::random_new(&fly_bbox))
@@ -146,10 +141,8 @@ fn main() {
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
 
-    println!("setting up octree");
     let octree = Octree::new(world_bounds);
 
-    println!("setting up arc wrappers for: bs, model_inst, octree");
     let shared_bs = Arc::new(bs);
     let shared_model_inst = Arc::new(model_inst);
     let shared_octree = Arc::new(octree);
@@ -177,31 +170,6 @@ fn main() {
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
-    let mut ground_model_inst = vec![];
-    //let mut ground_grid_offsets = vec![];
-    {
-        use rand::Rng;
-        let ground_divide = 10.0;
-        let rand_range = 10.0;
-        let gdi = ground_divide as isize;
-        let mut rand = rand::weak_rng();
-        for i in 0..gdi {
-            let xx = (world_bounds.xlen() / ground_divide) * (i as f32);
-            for j in 0..gdi {
-                let zz = (world_bounds.xlen() / ground_divide) * (j as f32);
-                let yoff = rand_range / 2.0 - rand.next_f32() * rand_range;
-                //ground_grid_offsets.push(yoff);
-                ground_model_inst.push(
-                    Matrix4::from_translation(Vector3::new(xx, yoff, zz)) *
-                    Matrix4::from(Matrix3::from_value(world_bounds.xlen() / ground_divide))
-                    );
-            }
-        }
-    }
-    let mut ground_mesh = gen_square_mesh();
-    ground_mesh.setup(pos_a, color_a, model_inst_a);
-    ground_mesh.update_inst(&ground_model_inst);
-
     let axis_model_inst = vec![
         Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5)) *
             Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
@@ -228,7 +196,6 @@ fn main() {
     debug_octree_mesh.update_inst(&debug_octree_inst);
 
 
-    println!("setting up uniforms");
     let alpha_u = prog.get_unif("alpha");
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
@@ -246,7 +213,6 @@ fn main() {
     view_u.upload_m4f(&view_m4);
     alpha_u.upload_1f(1.0);
 
-    println!("setting up timers");
     let mut tm = TimeMap::new();
     let mut frame_t = Timer::new();
     let mut section_t = Timer::new();
@@ -270,14 +236,15 @@ fn main() {
     let mut frame_count = 0;
 
     frame_t.start();
-    println!("starting main loop");
     while !window.should_close() {
         if debug_verbose { println!("{}: frame start", frame_count); }
         let tlastframe = frame_t.stop();
         frame_t.start();
 
         section_t.start(); // events
+        if debug_verbose { println!("{}: glfw calling poll_events", frame_count); }
         glfw.poll_events();
+        if debug_verbose { println!("{}: glfw returned from poll_events", frame_count); }
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::FramebufferSize(w, h) => {
@@ -299,7 +266,7 @@ fn main() {
                     debug_verbose = !debug_verbose;
                 }
                 glfw::WindowEvent::Key(Key::O, _, Action::Press, mods) => {
-                    if mods.contains(glfw::Shift) {
+                    if mods.contains(Modifiers::Shift) {
                         debug_octree_level = (debug_octree_level + 1) % 4;
                     } else {
                         enable_octree = !enable_octree;
@@ -308,12 +275,18 @@ fn main() {
 
                 glfw::WindowEvent::Scroll(xoff, yoff) => {
                     let off_epsilon = 0.15;
-                    let xoff = xoff as f32;
-                    let yoff = yoff as f32;
-                    if debug_verbose { println!("{}: scroll: x: {}, y: {}", frame_count, xoff, yoff); }
+                    let shift = window.get_key(Key::LeftShift) == Action::Press;
+                    let (xoff, yoff) =
+                        if !shift {
+                            (xoff as f32, yoff as f32)
+                        } else {
+                            (yoff as f32, xoff as f32)
+                        };
+
+                    if debug_verbose { println!("{}: {} scroll: x: {}, y: {}", frame_count, if shift { "reverse" } else { "" }, xoff, yoff); }
 
                     if xoff.abs() > off_epsilon {
-                        horiz_view_angle = horiz_view_angle + Deg(180.0 * xoff);
+                        horiz_view_angle = horiz_view_angle + Deg(2.0 * xoff);
                         view_update = true;
                     }
 
@@ -324,11 +297,11 @@ fn main() {
                 }
 
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, mode)=> {
-                    horiz_view_angle += if mode.contains(glfw::Shift) { Deg(5.0) } else { Deg(1.0) };
+                    horiz_view_angle += if mode.contains(Modifiers::Shift) { Deg(5.0) } else { Deg(1.0) };
                     view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, mode) => {
-                    horiz_view_angle -= if mode.contains(glfw::Shift) { Deg(5.0) } else { Deg(1.0) };
+                    horiz_view_angle -= if mode.contains(Modifiers::Shift) { Deg(5.0) } else { Deg(1.0) };
                     view_update = true;
                 }
 
@@ -342,7 +315,7 @@ fn main() {
                 }
 
                 glfw::WindowEvent::Key(Key::Equal, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Equal, _, Action::Repeat, mods) => {
-                    let num_add = if mods.contains(glfw::Shift) { 10 } else { 1 };
+                    let num_add = if mods.contains(Modifiers::Shift) { 10 } else { 1 };
                     unsafe {
                         let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
                         let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
@@ -361,7 +334,7 @@ fn main() {
 
                 glfw::WindowEvent::Key(Key::Minus, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, mods) => {
                     if shared_bs.len() > 1 {
-                        let num_remove = if mods.contains(glfw::Shift) { 10 } else { 1 };
+                        let num_remove = if mods.contains(Modifiers::Shift) { 10 } else { 1 };
                         let num_remove = if num_remove > shared_bs.len() - 1 { shared_bs.len() - 1 } else { num_remove };
                         unsafe {
                             let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
@@ -382,6 +355,8 @@ fn main() {
             }
         }
 
+        if debug_verbose { println!("{}: event parse", frame_count); }
+
         if view_update {
             view_update = false;
 
@@ -389,7 +364,7 @@ fn main() {
             let eye2d = Vector2::new(eye.x, eye.z);
             let dir = eye2d - target2d;
 
-            let rot2d: Basis2<f32> = Rotation2::from_angle(horiz_view_angle);
+            let rot2d: Basis2<f32> = Rotation2::<f32>::from_angle(horiz_view_angle);
             let new_dir = rot2d.rotate_vector(dir);
 
             let new_eye2d = target2d + new_dir;
@@ -676,7 +651,6 @@ fn main() {
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
-        ground_mesh.draw_inst(ground_model_inst.len() as GLint);
         if debug {
             debug_lines_mesh.draw_inst(debug_lines_inst.len() as GLint);
         }
@@ -745,18 +719,16 @@ fn gen_paperplane_mesh() -> Mesh {
 }
 
 fn gen_square_mesh() -> Mesh {
-    // x-z square
     let vertices = vec![
         // vertex        // color
-        0.0,  0.0,  0.0, 0.5, 0.5, 0.5f32,
-        1.0,  0.0,  0.0, 0.5, 0.5, 0.5f32,
-        1.0,  0.0,  1.0, 0.5, 0.5, 0.5f32,
-        0.0,  0.0,  1.0, 0.5, 0.5, 0.5f32,
+        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
+        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
     ];
     let vertex_size = 6;
-    //let elements = vec![ 0u32, 1, 2, 3, ]; // gl::LINES
-    let elements = vec![ 0u32, 1, 2, 0, 2, 3, ];
-    Mesh::new("square", vertices, elements, vertex_size, gl::TRIANGLES)
+    let elements = vec![ 0u32, 1, 2, 3, ];
+    Mesh::new("square", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
 fn gen_axis_mesh() -> Mesh {
