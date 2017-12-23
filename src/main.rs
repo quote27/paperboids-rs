@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::mem;
 use std::usize;
 use gl::types::*;
-use glfw::{Action, Context, Key};
+use glfw::{Action, Context, Key, Modifiers};
 use cgmath::*;
 use shaders::{Shader, Program};
 use mesh::Mesh;
@@ -274,7 +274,7 @@ fn main() {
                     debug_verbose = !debug_verbose;
                 }
                 glfw::WindowEvent::Key(Key::O, _, Action::Press, mods) => {
-                    if mods.contains(glfw::Shift) {
+                    if mods.contains(Modifiers::Shift) {
                         debug_octree_level = (debug_octree_level + 1) % 4;
                     } else {
                         enable_octree = !enable_octree;
@@ -305,11 +305,11 @@ fn main() {
                 }
 
                 glfw::WindowEvent::Key(Key::Left, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, mode)=> {
-                    horiz_view_angle += if mode.contains(glfw::Shift) { deg(5.0) } else { deg(1.0) };
+                    horiz_view_angle += if mode.contains(Modifiers::Shift) { Deg(5.0) } else { Deg(1.0) };
                     view_update = true;
                 }
                 glfw::WindowEvent::Key(Key::Right, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, mode) => {
-                    horiz_view_angle -= if mode.contains(glfw::Shift) { deg(5.0) } else { deg(1.0) };
+                    horiz_view_angle -= if mode.contains(Modifiers::Shift) { Deg(5.0) } else { Deg(1.0) };
                     view_update = true;
                 }
 
@@ -323,7 +323,7 @@ fn main() {
                 }
 
                 glfw::WindowEvent::Key(Key::Equal, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Equal, _, Action::Repeat, mods) => {
-                    let num_add = if mods.contains(glfw::Shift) { 10 } else { 1 };
+                    let num_add = if mods.contains(Modifiers::Shift) { 10 } else { 1 };
                     unsafe {
                         let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
                         let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
@@ -342,7 +342,7 @@ fn main() {
 
                 glfw::WindowEvent::Key(Key::Minus, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, mods) => {
                     if shared_bs.len() > 1 {
-                        let num_remove = if mods.contains(glfw::Shift) { 10 } else { 1 };
+                        let num_remove = if mods.contains(Modifiers::Shift) { 10 } else { 1 };
                         let num_remove = if num_remove > shared_bs.len() - 1 { shared_bs.len() - 1 } else { num_remove };
                         unsafe {
                             let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());

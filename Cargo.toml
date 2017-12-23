@@ -5,6 +5,7 @@ authors = ["quote <quote@dust.io>"]
 
 [dependencies]
 cgmath = "*"
+glfw-sys = "*"
 glfw = "*"
 time = "*"
 gl = "*"
