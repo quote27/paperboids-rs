@@ -1,8 +1,9 @@
 extern crate cgmath;
 extern crate rand;
 
-use cgmath::*;
 use aabb::AABB;
+use cgmath::*;
+use rand::prelude::*;
 
 pub struct Boid {
     pub pos: Vector3<f32>,
@@ -13,16 +14,15 @@ pub struct Boid {
 
 impl Boid {
     pub fn random_new(bbox: &AABB) -> Boid {
-        use rand::Rng;
-        let mut rand = rand::weak_rng();
+        let mut rand = rand::thread_rng();
 
-        let x = bbox.l.x + rand.next_f32() * bbox.xlen();
-        let y = bbox.l.y + rand.next_f32() * bbox.ylen();
-        let z = bbox.l.z + rand.next_f32() * bbox.zlen();
+        let x = bbox.l.x + rand.gen::<f32>() * bbox.xlen();
+        let y = bbox.l.y + rand.gen::<f32>() * bbox.ylen();
+        let z = bbox.l.z + rand.gen::<f32>() * bbox.zlen();
 
-        let vx = 10.0 - rand.next_f32() * 20.0;
-        let vy = 10.0 - rand.next_f32() * 20.0;
-        let vz = 10.0 - rand.next_f32() * 20.0;
+        let vx = 10.0 - rand.gen::<f32>() * 20.0;
+        let vy = 10.0 - rand.gen::<f32>() * 20.0;
+        let vz = 10.0 - rand.gen::<f32>() * 20.0;
 
         Boid {
             pos: Vector3::new(x, y, z),
@@ -66,4 +66,3 @@ impl Boid {
         Matrix4::from_translation(self.pos) * Matrix4::from(m3)
     }
 }
-

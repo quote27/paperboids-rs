@@ -84,7 +84,7 @@ fn main() {
     // config variables
     let threads = 8;
     let world_bounds = AABB::new(Vector3::zero(), Vector3::new(100.0, 100.0, 100.0));
-    let world_scale = 1.0;
+    let world_scale = 0.5;
     let look_radius = 30.0 * world_scale;
     let look_radius2 = look_radius * look_radius;
     let collide_radius = 8.0 * world_scale;
