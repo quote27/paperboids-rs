@@ -94,7 +94,7 @@ fn main() {
     let collide_radius = 8.0 * world_scale;
     let collide_radius2 = collide_radius * collide_radius;
     let max_mag = 100.0;
-    let mut num_boids = 1000;
+    let mut num_boids = 100;
     let mut work_size = num_boids / threads;
 
     let default_weights = vec![
@@ -164,11 +164,12 @@ fn main() {
     }
 
     let tree_model_inst = vec![
-        Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5))
-            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
+        Matrix4::from_translation(Vector3::new(5.0, 5.0, 5.0))
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 5.0)),
     ];
     let mut tree_mesh = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0));
     tree_mesh.setup(pos_a, color_a, model_inst_a);
+    tree_mesh.update_inst(&tree_model_inst);
 
     // other models
     let cube_model_inst = vec![
@@ -936,6 +937,7 @@ fn load_tree_mesh(color: &Vector3<f32>) -> Mesh {
     );
 
     let vertex_size = 6;
+    // gl::TRIANGLES
     Mesh::new("tree", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
