@@ -2,6 +2,7 @@
 extern crate cgmath;
 extern crate gl;
 extern crate glfw;
+extern crate gltf;
 extern crate rand;
 extern crate time;
 
@@ -13,7 +14,10 @@ use glfw::{Action, Context, Key, Modifiers};
 use mesh::Mesh;
 use octree::{Octnode, Octree};
 use shaders::{Program, Shader};
+use std::fs;
+use std::io;
 use std::mem;
+use std::path::Path;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
@@ -158,6 +162,13 @@ fn main() {
     {
         predator_boid.min_speed = 10.0 * world_scale;
     }
+
+    let tree_model_inst = vec![
+        Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5))
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
+    ];
+    let mut tree_mesh = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0));
+    tree_mesh.setup(pos_a, color_a, model_inst_a);
 
     // other models
     let cube_model_inst = vec![
@@ -746,6 +757,7 @@ fn main() {
 
         predator_mesh.draw_inst(predator_model_inst.len() as GLint);
 
+        tree_mesh.draw_inst(tree_model_inst.len() as GLint);
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
         if debug {
@@ -879,6 +891,52 @@ fn gen_cube_mesh(color: &Vector3<f32>) -> Mesh {
     let elements = vec![0u32, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3];
 
     Mesh::new("cube", vertices, elements, vertex_size, gl::LINE_LOOP)
+}
+
+fn load_tree_mesh(color: &Vector3<f32>) -> Mesh {
+    let tree_blocks_file = Path::new("data/tree_blocks.gltf");
+    let (document, buffers, images) = gltf::import(tree_blocks_file).unwrap();
+
+    let mut vertices: Vec<f32> = vec![];
+    let mut elements: Vec<u32> = vec![];
+
+    for mesh in document.meshes() {
+        println!("mes #{}", mesh.index());
+
+        for primitive in mesh.primitives() {
+            println!("- primitive #{}", primitive.index());
+
+            let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+            if let Some(iter) = reader.read_positions() {
+                for vert_pos in iter {
+                    vertices.extend_from_slice(&vert_pos);
+                    vertices.push(color[0]);
+                    vertices.push(color[1]);
+                    vertices.push(color[2]);
+                }
+            }
+            if let Some(readindices) = reader.read_indices() {
+                println!("got read indices");
+                let iter = readindices.into_u32();
+                for idx in iter {
+                    elements.push(idx);
+                }
+            }
+            break;
+        }
+        break;
+    }
+
+    println!(
+        "tree mesh: num verts: [{} / 6 = {}], num elements: {}",
+        vertices.len(),
+        vertices.len() / 6,
+        elements.len()
+    );
+
+    let vertex_size = 6;
+    Mesh::new("tree", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
 fn gen_debug_line_mesh(num_boids: usize) -> Mesh {
