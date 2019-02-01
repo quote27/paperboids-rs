@@ -1,31 +1,31 @@
 #![allow(mutable_transmutes)]
+extern crate cgmath;
 extern crate gl;
 extern crate glfw;
-extern crate cgmath;
-extern crate time;
 extern crate rand;
+extern crate time;
 
-use std::thread;
-use std::sync::mpsc;
-use std::sync::Arc;
-use std::mem;
-use std::usize;
-use gl::types::*;
-use glfw::{Action, Context, Key, Modifiers};
-use cgmath::*;
-use shaders::{Shader, Program};
-use mesh::Mesh;
-use timer::{Timer, TimeMap};
 use aabb::AABB;
 use boids::Boid;
-use octree::{Octree, Octnode};
+use cgmath::*;
+use gl::types::*;
+use glfw::{Action, Context, Key, Modifiers};
+use mesh::Mesh;
+use octree::{Octnode, Octree};
+use shaders::{Program, Shader};
+use std::mem;
+use std::sync::mpsc;
+use std::sync::Arc;
+use std::thread;
+use std::usize;
+use timer::{TimeMap, Timer};
 
-mod shaders;
-mod mesh;
-mod timer;
 mod aabb;
 mod boids;
+mod mesh;
 mod octree;
+mod shaders;
+mod timer;
 
 // todo list
 // TODO: add command line options
@@ -63,10 +63,13 @@ fn main() {
 
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 2));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
+    glfw.window_hint(glfw::WindowHint::OpenGlProfile(
+        glfw::OpenGlProfileHint::Core,
+    ));
     glfw.window_hint(glfw::WindowHint::Resizable(true));
 
-    let (mut window, events) = glfw.create_window(_width, _height, "paperboids", glfw::WindowMode::Windowed)
+    let (mut window, events) = glfw
+        .create_window(_width, _height, "paperboids", glfw::WindowMode::Windowed)
         .expect("failed to create glfw window");
 
     // TODO: `as *const _` needed to convert glfw's output
@@ -81,7 +84,7 @@ fn main() {
     // config variables
     let threads = 8;
     let world_bounds = AABB::new(Vector3::zero(), Vector3::new(100.0, 100.0, 100.0));
-    let world_scale = 0.5;
+    let world_scale = 1.0;
     let look_radius = 30.0 * world_scale;
     let look_radius2 = look_radius * look_radius;
     let collide_radius = 8.0 * world_scale;
@@ -90,7 +93,7 @@ fn main() {
     let mut num_boids = 1000;
     let mut work_size = num_boids / threads;
 
-    let default_weights  = vec![
+    let default_weights = vec![
         //30.0, // avoid obstacles
         20.0, // avoid obstacles
         12.0, // collision avoidance
@@ -118,12 +121,10 @@ fn main() {
     let prog = Program::new(&shaders_v);
     gl_error_str("program created");
 
-
     prog.use_prog();
     let pos_a = prog.get_attrib("position") as GLuint;
     let color_a = prog.get_attrib("color") as GLuint;
     let model_inst_a = prog.get_attrib("model_inst") as GLuint;
-
 
     let model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale));
     let pred_model_default_scale_mat = Matrix4::from(Matrix3::from_value(world_scale * 5.0));
@@ -149,10 +150,9 @@ fn main() {
 
     // antagonist *later will be a sphere)
     let mut predator_boid = Boid::random_new(&fly_bbox);
-    let predator_model_inst = vec![
-        predator_boid.model() * pred_model_default_scale_mat
-    ];
-    let mut predator_mesh = gen_cube_mesh(&Vector3::new(1.0, 0.0, 0.0));
+    let predator_model_inst = vec![predator_boid.model() * pred_model_default_scale_mat];
+    // let mut predator_mesh = gen_cube_mesh(&Vector3::new(1.0, 0.0, 0.0));
+    let mut predator_mesh = gen_paperplane_mesh_color(&Vector3::new(1.0, 0.0, 0.0));
     predator_mesh.setup(pos_a, color_a, model_inst_a);
     predator_mesh.update_inst(&predator_model_inst);
     {
@@ -161,18 +161,18 @@ fn main() {
 
     // other models
     let cube_model_inst = vec![
-        Matrix4::from_translation(world_bounds.center()) *
-            Matrix4::from(Matrix3::from_value(world_bounds.xlen())),
-        Matrix4::from_translation(fly_bbox.center()) *
-            Matrix4::from(Matrix3::from_value(fly_bbox.xlen())),
+        Matrix4::from_translation(world_bounds.center())
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen())),
+        Matrix4::from_translation(fly_bbox.center())
+            * Matrix4::from(Matrix3::from_value(fly_bbox.xlen())),
     ];
-    let mut cube_mesh = gen_cube_mesh(&Vector3::new(1.0, 1.0, 1.0));
+    let mut cube_mesh = gen_cube_mesh(&Vector3::new(0.0, 0.0, 0.0));
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
     let axis_model_inst = vec![
-        Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5)) *
-            Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
+        Matrix4::from_translation(Vector3::new(0.5, 0.5, 0.5))
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 10.0)),
     ];
     let mut axis_mesh = gen_axis_mesh();
     axis_mesh.setup(pos_a, color_a, model_inst_a);
@@ -195,7 +195,6 @@ fn main() {
     debug_octree_mesh.setup(pos_a, color_a, model_inst_a);
     debug_octree_mesh.update_inst(&debug_octree_inst);
 
-
     let alpha_u = prog.get_unif("alpha");
     let view_u = prog.get_unif("view");
     let proj_u = prog.get_unif("proj");
@@ -205,7 +204,11 @@ fn main() {
     let mut view_update = true;
 
     let mut proj_m4 = perspective(Deg(45.0), _width as f32 / _height as f32, 0.01, 1000.0);
-    let eye = Point3::new(world_bounds.h.x * 2.0, world_bounds.h.y * 1.5, world_bounds.h.z * 2.0);
+    let eye = Point3::new(
+        world_bounds.h.x * 2.0,
+        world_bounds.h.y * 1.5,
+        world_bounds.h.z * 2.0,
+    );
     let target = Point3::from_vec(world_bounds.center());
     let mut view_m4 = Matrix4::look_at(eye, target, Vector3::unit_y());
 
@@ -226,7 +229,7 @@ fn main() {
     let tm_compute_rules = "02.2.rules";
     let tm_compute_update = "02.3.u_boid";
     let tm_compute_update_inst = "02.4.u_inst";
-    let tm_draw_inst ="03.draw_i";
+    let tm_draw_inst = "03.draw_i";
 
     let mut pause = true;
     let mut debug = false;
@@ -237,18 +240,26 @@ fn main() {
 
     frame_t.start();
     while !window.should_close() {
-        if debug_verbose { println!("{}: frame start", frame_count); }
+        if debug_verbose {
+            println!("{}: frame start", frame_count);
+        }
         let tlastframe = frame_t.stop();
         frame_t.start();
 
         section_t.start(); // events
-        if debug_verbose { println!("{}: glfw calling poll_events", frame_count); }
+        if debug_verbose {
+            println!("{}: glfw calling poll_events", frame_count);
+        }
         glfw.poll_events();
-        if debug_verbose { println!("{}: glfw returned from poll_events", frame_count); }
+        if debug_verbose {
+            println!("{}: glfw returned from poll_events", frame_count);
+        }
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::FramebufferSize(w, h) => {
-                    unsafe { gl::Viewport(0, 0, w, h); }
+                    unsafe {
+                        gl::Viewport(0, 0, w, h);
+                    }
                     proj_m4 = perspective(Deg(45.0), w as f32 / h as f32, 0.01, 1000.0);
                     proj_u.upload_m4f(&proj_m4);
                 }
@@ -276,14 +287,21 @@ fn main() {
                 glfw::WindowEvent::Scroll(xoff, yoff) => {
                     let off_epsilon = 0.15;
                     let shift = window.get_key(Key::LeftShift) == Action::Press;
-                    let (xoff, yoff) =
-                        if !shift {
-                            (xoff as f32, yoff as f32)
-                        } else {
-                            (yoff as f32, xoff as f32)
-                        };
+                    let (xoff, yoff) = if !shift {
+                        (xoff as f32, yoff as f32)
+                    } else {
+                        (yoff as f32, xoff as f32)
+                    };
 
-                    if debug_verbose { println!("{}: {} scroll: x: {}, y: {}", frame_count, if shift { "reverse" } else { "" }, xoff, yoff); }
+                    if debug_verbose {
+                        println!(
+                            "{}: {} scroll: x: {}, y: {}",
+                            frame_count,
+                            if shift { "reverse" } else { "" },
+                            xoff,
+                            yoff
+                        );
+                    }
 
                     if xoff.abs() > off_epsilon {
                         horiz_view_angle = horiz_view_angle + Deg(2.0 * xoff);
@@ -291,33 +309,52 @@ fn main() {
                     }
 
                     if yoff.abs() > off_epsilon {
-                        vert_view_height = vert_view_height + 0.5 * (world_bounds.xlen() / 10.0) * yoff;
+                        vert_view_height =
+                            vert_view_height + 0.5 * (world_bounds.xlen() / 10.0) * yoff;
                         view_update = true;
                     }
                 }
 
-                glfw::WindowEvent::Key(Key::Left, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, mode)=> {
-                    horiz_view_angle += if mode.contains(Modifiers::Shift) { Deg(5.0) } else { Deg(1.0) };
+                glfw::WindowEvent::Key(Key::Left, _, Action::Press, mode)
+                | glfw::WindowEvent::Key(Key::Left, _, Action::Repeat, mode) => {
+                    horiz_view_angle += if mode.contains(Modifiers::Shift) {
+                        Deg(5.0)
+                    } else {
+                        Deg(1.0)
+                    };
                     view_update = true;
                 }
-                glfw::WindowEvent::Key(Key::Right, _, Action::Press, mode) | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, mode) => {
-                    horiz_view_angle -= if mode.contains(Modifiers::Shift) { Deg(5.0) } else { Deg(1.0) };
+                glfw::WindowEvent::Key(Key::Right, _, Action::Press, mode)
+                | glfw::WindowEvent::Key(Key::Right, _, Action::Repeat, mode) => {
+                    horiz_view_angle -= if mode.contains(Modifiers::Shift) {
+                        Deg(5.0)
+                    } else {
+                        Deg(1.0)
+                    };
                     view_update = true;
                 }
 
-                glfw::WindowEvent::Key(Key::Up, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Up, _, Action::Repeat, _) => {
+                glfw::WindowEvent::Key(Key::Up, _, Action::Press, _)
+                | glfw::WindowEvent::Key(Key::Up, _, Action::Repeat, _) => {
                     vert_view_height = vert_view_height + 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
-                glfw::WindowEvent::Key(Key::Down, _, Action::Press, _) | glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
+                glfw::WindowEvent::Key(Key::Down, _, Action::Press, _)
+                | glfw::WindowEvent::Key(Key::Down, _, Action::Repeat, _) => {
                     vert_view_height = vert_view_height - 0.5 * (world_bounds.xlen() / 10.0);
                     view_update = true;
                 }
 
-                glfw::WindowEvent::Key(Key::Equal, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Equal, _, Action::Repeat, mods) => {
-                    let num_add = if mods.contains(Modifiers::Shift) { 10 } else { 1 };
+                glfw::WindowEvent::Key(Key::Equal, _, Action::Press, mods)
+                | glfw::WindowEvent::Key(Key::Equal, _, Action::Repeat, mods) => {
+                    let num_add = if mods.contains(Modifiers::Shift) {
+                        10
+                    } else {
+                        1
+                    };
                     unsafe {
-                        let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
+                        let msmi: &mut Vec<Matrix4<f32>> =
+                            mem::transmute(&*shared_model_inst.clone());
                         let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
 
                         for _ in 0..num_add {
@@ -329,16 +366,31 @@ fn main() {
                     num_boids = shared_bs.len();
                     work_size = num_boids / threads;
                     resize_debug_line_mesh(&mut debug_lines_mesh, num_boids);
-                    if debug_verbose { println!("{}: pushed new boid: num: {}, work_size: {}", frame_count, num_boids, work_size); }
+                    if debug_verbose {
+                        println!(
+                            "{}: pushed new boid: num: {}, work_size: {}",
+                            frame_count, num_boids, work_size
+                        );
+                    }
                 }
 
-                glfw::WindowEvent::Key(Key::Minus, _, Action::Press, mods) | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, mods) => {
+                glfw::WindowEvent::Key(Key::Minus, _, Action::Press, mods)
+                | glfw::WindowEvent::Key(Key::Minus, _, Action::Repeat, mods) => {
                     if shared_bs.len() > 1 {
-                        let num_remove = if mods.contains(Modifiers::Shift) { 10 } else { 1 };
-                        let num_remove = if num_remove > shared_bs.len() - 1 { shared_bs.len() - 1 } else { num_remove };
+                        let num_remove = if mods.contains(Modifiers::Shift) {
+                            10
+                        } else {
+                            1
+                        };
+                        let num_remove = if num_remove > shared_bs.len() - 1 {
+                            shared_bs.len() - 1
+                        } else {
+                            num_remove
+                        };
                         unsafe {
                             let mbs: &mut Vec<Boid> = mem::transmute(&*shared_bs.clone());
-                            let msmi: &mut Vec<Matrix4<f32>> = mem::transmute(&*shared_model_inst.clone());
+                            let msmi: &mut Vec<Matrix4<f32>> =
+                                mem::transmute(&*shared_model_inst.clone());
                             for _ in 0..num_remove {
                                 mbs.pop();
                                 msmi.pop();
@@ -347,7 +399,12 @@ fn main() {
                         num_boids = shared_bs.len();
                         work_size = num_boids / threads;
                         resize_debug_line_mesh(&mut debug_lines_mesh, num_boids);
-                        if debug_verbose { println!("{}: removed boid: num: {}, work_size: {}", frame_count, num_boids, work_size); }
+                        if debug_verbose {
+                            println!(
+                                "{}: removed boid: num: {}, work_size: {}",
+                                frame_count, num_boids, work_size
+                            );
+                        }
                     }
                 }
 
@@ -355,7 +412,9 @@ fn main() {
             }
         }
 
-        if debug_verbose { println!("{}: event parse", frame_count); }
+        if debug_verbose {
+            println!("{}: event parse", frame_count);
+        }
 
         if view_update {
             view_update = false;
@@ -373,7 +432,9 @@ fn main() {
             view_u.upload_m4f(&view_m4);
         }
         tm.update(tm_events, section_t.stop());
-        if debug_verbose { println!("{}: event parse + view update", frame_count); }
+        if debug_verbose {
+            println!("{}: event parse + view update", frame_count);
+        }
 
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
@@ -382,7 +443,9 @@ fn main() {
 
         compute_t.start();
         if !pause {
-            if debug_verbose { println!("{}: compute start", frame_count); }
+            if debug_verbose {
+                println!("{}: compute start", frame_count);
+            }
             let dt = (tlastframe as f32) * 1e-3; // convert from ms to sec
 
             // octree build step
@@ -392,14 +455,20 @@ fn main() {
                 // I could use a RWLock like before, but that won't help when
                 // it comes to parallel builds
                 let octree: &mut Octree = unsafe { mem::transmute(&*shared_octree) };
-                if debug_verbose { println!("{}: octree reset", frame_count); }
+                if debug_verbose {
+                    println!("{}: octree reset", frame_count);
+                }
                 octree.reset(world_bounds);
 
                 let bs = shared_bs.clone(); // just need read access
 
-                if debug_verbose { println!("{}: octree insert", frame_count); }
+                if debug_verbose {
+                    println!("{}: octree insert", frame_count);
+                }
                 octree.insert(&*bs); // FIXME: overflow in insert logic
-                if debug_verbose { println!("{}: octree update", frame_count); }
+                if debug_verbose {
+                    println!("{}: octree update", frame_count);
+                }
                 octree.update(&*bs);
 
                 // TODO: add octree debug drawing using cubes
@@ -410,26 +479,32 @@ fn main() {
                     for o in octree.pool.iter() {
                         let draw = match o.state {
                             octree::OctnodeState::Node => debug_octree_level >= 2,
-                            octree::OctnodeState::Leaf => debug_octree_level == 1 || debug_octree_level == 3,
+                            octree::OctnodeState::Leaf => {
+                                debug_octree_level == 1 || debug_octree_level == 3
+                            }
                             _ => false,
                         };
 
                         if draw {
                             debug_octree_inst.push(
-                                Matrix4::from_translation(o.bbox.center()) *
-                                    Matrix4::from(Matrix3::from_value(o.bbox.xlen()))
-                                );
+                                Matrix4::from_translation(o.bbox.center())
+                                    * Matrix4::from(Matrix3::from_value(o.bbox.xlen())),
+                            );
                         }
                     }
 
                     debug_octree_mesh.update_inst(&debug_octree_inst);
                 }
 
-                if debug_verbose { println!("{}: octree fin", frame_count); }
+                if debug_verbose {
+                    println!("{}: octree fin", frame_count);
+                }
                 tm.update(tm_compute_octree_build, section_t.stop());
             }
 
-            if debug_verbose { println!("{}: sim start: {} boids", frame_count, shared_bs.len()); }
+            if debug_verbose {
+                println!("{}: sim start: {} boids", frame_count, shared_bs.len());
+            }
             section_t.start();
 
             // move predator
@@ -461,14 +536,19 @@ fn main() {
                     let weights = thread_weights;
 
                     let start_id = tid * work_size;
-                    let work_size =
-                        if tid == threads - 1 {
-                            work_size + num_boids % threads
-                        } else {
-                            work_size
-                        };
+                    let work_size = if tid == threads - 1 {
+                        work_size + num_boids % threads
+                    } else {
+                        work_size
+                    };
 
-                    let mut rules = vec![Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero(), Vector3::zero()];
+                    let mut rules = vec![
+                        Vector3::zero(),
+                        Vector3::zero(),
+                        Vector3::zero(),
+                        Vector3::zero(),
+                        Vector3::zero(),
+                    ];
                     for i in start_id..(start_id + work_size) {
                         //rules[0] = Vector3::zero();
                         {
@@ -483,12 +563,18 @@ fn main() {
                         }
 
                         {
-                            let (r1, r2, r3) =
-                                if enable_octree {
-                                    calc_rules_octree(&bs, i, &*octree, look_radius, look_radius2, collide_radius2)
-                                } else {
-                                    calc_rules(&bs, i, look_radius2, collide_radius2)
-                                };
+                            let (r1, r2, r3) = if enable_octree {
+                                calc_rules_octree(
+                                    &bs,
+                                    i,
+                                    &*octree,
+                                    look_radius,
+                                    look_radius2,
+                                    collide_radius2,
+                                )
+                            } else {
+                                calc_rules(&bs, i, look_radius2, collide_radius2)
+                            };
                             rules[1] = r1 * weights[1];
                             rules[2] = r2 * weights[2];
                             rules[3] = r3 * weights[3];
@@ -503,7 +589,9 @@ fn main() {
                             let m = r.magnitude();
 
                             // TODO: change this to epsilon
-                            if m == 0.0 { continue; }
+                            if m == 0.0 {
+                                continue;
+                            }
 
                             if mag + m > max_mag {
                                 // rebalance last rule
@@ -532,9 +620,13 @@ fn main() {
                 rx.recv();
             }
             tm.update(tm_compute_rules, section_t.stop());
-            if debug_verbose { println!("{}: sim stop", frame_count); }
+            if debug_verbose {
+                println!("{}: sim stop", frame_count);
+            }
 
-            if debug_verbose { println!("{}: update start", frame_count); }
+            if debug_verbose {
+                println!("{}: update start", frame_count);
+            }
             section_t.start();
             for tid in 0..threads {
                 let thread_tx = tx.clone();
@@ -546,12 +638,11 @@ fn main() {
                     let model_inst = thread_model_inst;
 
                     let start_id = tid * work_size;
-                    let work_size =
-                        if tid == threads - 1 {
-                            work_size + num_boids % threads
-                        } else {
-                            work_size
-                        };
+                    let work_size = if tid == threads - 1 {
+                        work_size + num_boids % threads
+                    } else {
+                        work_size
+                    };
 
                     for i in start_id..(start_id + work_size) {
                         unsafe {
@@ -573,7 +664,9 @@ fn main() {
                 rx.recv();
             }
             tm.update(tm_compute_update, section_t.stop());
-            if debug_verbose { println!("{}: update stop", frame_count); }
+            if debug_verbose {
+                println!("{}: update stop", frame_count);
+            }
 
             if debug {
                 let bs = shared_bs.clone();
@@ -632,12 +725,16 @@ fn main() {
                 debug_lines_mesh.update_verts();
             }
 
-            if debug_verbose { println!("{}: plane update inst start", frame_count); }
+            if debug_verbose {
+                println!("{}: plane update inst start", frame_count);
+            }
             section_t.start();
             plane_mesh.update_inst(&shared_model_inst);
             predator_mesh.update_inst(&predator_model_inst);
             tm.update(tm_compute_update_inst, section_t.stop());
-            if debug_verbose { println!("{}: plane update inst fin", frame_count); }
+            if debug_verbose {
+                println!("{}: plane update inst fin", frame_count);
+            }
         }
 
         tm.update(tm_compute, compute_t.stop());
@@ -672,7 +769,9 @@ fn main() {
             frame_total = 0.0;
             tm.clear();
         }
-        if debug_verbose { println!("{}: frame end", frame_count); }
+        if debug_verbose {
+            println!("{}: frame end", frame_count);
+        }
     }
 
     println!("paperboids end");
@@ -697,11 +796,11 @@ fn gen_paperplane_mesh() -> Mesh {
     // y+ is top
     let vertices = vec![
         // vertex        // color
-        0.0,  0.0,  1.0, 1.0, 1.0, 1.0f32, // front / nose
-        0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // left wing / 'port'
-       -0.75, 0.0, -1.0, 1.0, 1.0, 1.0,    // right wing / 'starboard
-        0.0,  0.0, -1.0, 1.0, 1.0, 1.0,    // back midpoint between wings
-        0.0, -0.4, -1.0, 1.0, 1.0, 1.0,    // back bottom fin
+        0.0, 0.0, 1.0, 1.0, 1.0, 1.0f32, // front / nose
+        0.75, 0.0, -1.0, 1.0, 1.0, 1.0, // left wing / 'port'
+        -0.75, 0.0, -1.0, 1.0, 1.0, 1.0, // right wing / 'starboard
+        0.0, 0.0, -1.0, 1.0, 1.0, 1.0, // back midpoint between wings
+        0.0, -0.4, -1.0, 1.0, 1.0, 1.0, // back bottom fin
     ];
     let vertex_size = 6;
 
@@ -713,36 +812,56 @@ fn gen_paperplane_mesh() -> Mesh {
     // ];
 
     // lines
-    let elements = vec![ 0u32, 1, 2, 0, 3, 4 ];
+    let elements = vec![0u32, 1, 2, 0, 3, 4];
 
     Mesh::new("paperplane", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
+fn gen_paperplane_mesh_color(color: &Vector3<f32>) -> Mesh {
+    // z+ is front
+    // y+ is top
+    let vertices = vec![
+        // vertex        // color
+        0.0, 0.0, 1.0, color.x, color.y, color.z, // front / nose
+        0.75, 0.0, -1.0, color.x, color.y, color.z, // left wing / 'port'
+        -0.75, 0.0, -1.0, color.x, color.y, color.z, // right wing / 'starboard
+        0.0, 0.0, -1.0, color.x, color.y, color.z, // back midpoint between wings
+        0.0, -0.4, -1.0, color.x, color.y, color.z, // back bottom fin
+    ];
+    let vertex_size = 6;
+
+    // triangles
+    // let elements = vec![
+    //     0u32, 1, 3,
+    //     0, 3, 2,
+    //     0, 4, 3,
+    // ];
+
+    // lines
+    let elements = vec![0u32, 1, 2, 0, 3, 4];
+
+    Mesh::new("paperplane", vertices, elements, vertex_size, gl::LINE_LOOP)
+}
 fn gen_square_mesh() -> Mesh {
     let vertices = vec![
         // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  0.0,  0.0, 1.0, 1.0, 1.0f32,
-        1.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
-        0.0,  1.0,  0.0, 1.0, 1.0, 1.0f32,
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0f32, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0f32, 1.0, 1.0, 0.0, 1.0, 1.0,
+        1.0f32, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0f32,
     ];
     let vertex_size = 6;
-    let elements = vec![ 0u32, 1, 2, 3, ];
+    let elements = vec![0u32, 1, 2, 3];
     Mesh::new("square", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
 fn gen_axis_mesh() -> Mesh {
     let vertices = vec![
         // vertex        // color
-        0.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
-        1.0,  0.0,  0.0, 1.0, 0.0, 0.0f32,
-        0.0,  0.0,  0.0, 0.0, 1.0, 0.0f32,
-        0.0,  1.0,  0.0, 0.0, 1.0, 0.0f32,
-        0.0,  0.0,  0.0, 0.0, 0.0, 1.0f32,
-        0.0,  0.0,  1.0, 0.0, 0.0, 1.0f32,
+        0.0, 0.0, 0.0, 1.0, 0.0, 0.0f32, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0f32, 0.0, 0.0, 0.0, 0.0, 1.0,
+        0.0f32, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0f32, 0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0f32,
     ];
     let vertex_size = 6;
-    let elements = vec![ 0u32, 1, 2, 3, 4, 5 ];
+    let elements = vec![0u32, 1, 2, 3, 4, 5];
 
     Mesh::new("axis", vertices, elements, vertex_size, gl::LINES)
 }
@@ -750,22 +869,14 @@ fn gen_axis_mesh() -> Mesh {
 fn gen_cube_mesh(color: &Vector3<f32>) -> Mesh {
     let vertices = vec![
         // vertex        // color
-       -0.5, -0.5, -0.5, color.x, color.y, color.z,
-       -0.5, -0.5,  0.5, color.x, color.y, color.z,
-        0.5, -0.5,  0.5, color.x, color.y, color.z,
-        0.5, -0.5, -0.5, color.x, color.y, color.z,
-       -0.5,  0.5, -0.5, color.x, color.y, color.z,
-       -0.5,  0.5,  0.5, color.x, color.y, color.z,
-        0.5,  0.5,  0.5, color.x, color.y, color.z,
-        0.5,  0.5, -0.5, color.x, color.y, color.z,
+        -0.5, -0.5, -0.5, color.x, color.y, color.z, -0.5, -0.5, 0.5, color.x, color.y, color.z,
+        0.5, -0.5, 0.5, color.x, color.y, color.z, 0.5, -0.5, -0.5, color.x, color.y, color.z,
+        -0.5, 0.5, -0.5, color.x, color.y, color.z, -0.5, 0.5, 0.5, color.x, color.y, color.z, 0.5,
+        0.5, 0.5, color.x, color.y, color.z, 0.5, 0.5, -0.5, color.x, color.y, color.z,
     ];
 
     let vertex_size = 6;
-    let elements = vec![
-        0u32, 1, 2, 3, 0,
-        4, 5, 6, 7, 4,
-        5, 1, 2, 6, 7, 3,
-    ];
+    let elements = vec![0u32, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3];
 
     Mesh::new("cube", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
@@ -790,8 +901,7 @@ fn resize_debug_line_mesh(mesh: &mut Mesh, num_boids: usize) {
         // shrink
         mesh.vertices.truncate(num_verts);
         mesh.elements.truncate(num_elem);
-        // println!("resize line mesh: shrinking, new verts len: {}, elem len: {}", mesh.vertices.len(), mesh.elements.len());
-
+    // println!("resize line mesh: shrinking, new verts len: {}, elem len: {}", mesh.vertices.len(), mesh.elements.len());
     } else {
         // grow
         let old_num_boids = mesh.vertices.len() / (mesh.vertex_size * 5);
@@ -868,32 +978,29 @@ fn resize_debug_line_mesh(mesh: &mut Mesh, num_boids: usize) {
 fn bounds_v(b: &Boid, bbox: &AABB) -> Vector3<f32> {
     let mut bounds = Vector3::zero();
 
-    bounds.x =
-        if b.pos.x > bbox.h.x {
-            -1.0
-        } else if b.pos.x < bbox.l.x {
-            1.0
-        } else {
-            0.0
-        };
+    bounds.x = if b.pos.x > bbox.h.x {
+        -1.0
+    } else if b.pos.x < bbox.l.x {
+        1.0
+    } else {
+        0.0
+    };
 
-    bounds.y =
-        if b.pos.y > bbox.h.y {
-            -1.0
-        } else if b.pos.y < bbox.l.y {
-            1.0
-        } else {
-            0.0
-        };
+    bounds.y = if b.pos.y > bbox.h.y {
+        -1.0
+    } else if b.pos.y < bbox.l.y {
+        1.0
+    } else {
+        0.0
+    };
 
-    bounds.z =
-        if b.pos.z > bbox.h.z {
-            -1.0
-        } else if b.pos.z < bbox.l.z {
-            1.0
-        } else {
-            0.0
-        };
+    bounds.z = if b.pos.z > bbox.h.z {
+        -1.0
+    } else if b.pos.z < bbox.l.z {
+        1.0
+    } else {
+        0.0
+    };
 
     if bounds != Vector3::zero() {
         bounds.normalize()
@@ -907,7 +1014,12 @@ fn bounds_v(b: &Boid, bbox: &AABB) -> Vector3<f32> {
 //
 
 // returns normalized results
-fn calc_rules(bs: &Vec<Boid>, bi: usize, look_radius2: f32, collide_radius2: f32) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+fn calc_rules(
+    bs: &Vec<Boid>,
+    bi: usize,
+    look_radius2: f32,
+    collide_radius2: f32,
+) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
     let b = &bs[bi];
     let mut r1 = Vector3::zero();
     let mut r2 = Vector3::zero();
@@ -916,7 +1028,9 @@ fn calc_rules(bs: &Vec<Boid>, bi: usize, look_radius2: f32, collide_radius2: f32
     let mut colliders = 0u32;
 
     for j in 0..bs.len() {
-        if bi == j { continue; }
+        if bi == j {
+            continue;
+        }
 
         let o = &bs[j];
 
@@ -975,7 +1089,14 @@ struct TraversalRecur {
     small_nodes: usize,
 }
 
-fn calc_rules_octree(bs: &Vec<Boid>, boid_id: usize, octree: &Octree, look_radius: f32, look_radius2: f32, collide_radius2: f32) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+fn calc_rules_octree(
+    bs: &Vec<Boid>,
+    boid_id: usize,
+    octree: &Octree,
+    look_radius: f32,
+    look_radius2: f32,
+    collide_radius2: f32,
+) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
     let b = &bs[boid_id];
     let tc = TraversalConst {
         b: b,
@@ -1019,7 +1140,9 @@ fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: usize) {
     let d = dv.magnitude();
 
     if o.is_leaf() {
-        if d < 1e-6 { return } // skip self
+        if d < 1e-6 {
+            return;
+        } // skip self
 
         single_interact(tc, tr, o, &dv, d);
         tr.leaves += 1;
@@ -1041,8 +1164,14 @@ fn traverse_octree(tc: &TraversalConst, tr: &mut TraversalRecur, curr: usize) {
     }
 }
 
-fn single_interact(tc: &TraversalConst, tr: &mut TraversalRecur, o: &Octnode, dv: &Vector3<f32>, d: f32) {
-    let d2 = d*d;
+fn single_interact(
+    tc: &TraversalConst,
+    tr: &mut TraversalRecur,
+    o: &Octnode,
+    dv: &Vector3<f32>,
+    d: f32,
+) {
+    let d2 = d * d;
 
     if d2 < tc.look_radius2 {
         tr.neighbors += 1;
