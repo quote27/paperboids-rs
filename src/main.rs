@@ -163,13 +163,25 @@ fn main() {
         predator_boid.min_speed = 10.0 * world_scale;
     }
 
+    let (mut tree_mesh, tree_mesh_translation) = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0), 0);
     let tree_model_inst = vec![
+        tree_mesh_translation * Matrix4::from(Matrix3::from_value(10.0)),
+        Matrix4::from(Matrix3::from_value(10.0)),
         Matrix4::from_translation(world_bounds.center())
             * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.9)),
     ];
-    let mut tree_mesh = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0));
     tree_mesh.setup(pos_a, color_a, model_inst_a);
     tree_mesh.update_inst(&tree_model_inst);
+
+    let (mut trunk_mesh, trunk_mesh_translation) = load_tree_mesh(&Vector3::new(1.0, 0.6, 0.4), 1);
+    let trunk_model_inst = vec![
+        trunk_mesh_translation * Matrix4::from(Matrix3::from_value(10.0)),
+        Matrix4::from(Matrix3::from_value(10.0)),
+        Matrix4::from_translation(world_bounds.center())
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.9)),
+    ];
+    trunk_mesh.setup(pos_a, color_a, model_inst_a);
+    trunk_mesh.update_inst(&trunk_model_inst);
 
     // other models
     let cube_model_inst = vec![
@@ -759,6 +771,8 @@ fn main() {
         predator_mesh.draw_inst(predator_model_inst.len() as GLint);
 
         tree_mesh.draw_inst(tree_model_inst.len() as GLint);
+        trunk_mesh.draw_inst(trunk_model_inst.len() as GLint);
+
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
         if debug {
@@ -894,7 +908,7 @@ fn gen_cube_mesh(color: &Vector3<f32>) -> Mesh {
     Mesh::new("cube", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
-fn load_tree_mesh(color: &Vector3<f32>) -> Mesh {
+fn load_tree_mesh(color: &Vector3<f32>, item: u32) -> (Mesh, Matrix4<f32>) {
     // let tree_blocks_file = Path::new("data/tree_blocks.gltf");
     let tree_blocks_file = Path::new("data/tree_oak.gltf");
     let (document, buffers, images) = gltf::import(tree_blocks_file).unwrap();
@@ -902,8 +916,14 @@ fn load_tree_mesh(color: &Vector3<f32>) -> Mesh {
     let mut vertices: Vec<f32> = vec![];
     let mut elements: Vec<u32> = vec![];
 
+    let mut count = 0;
+
     for mesh in document.meshes() {
         for primitive in mesh.primitives() {
+            if count != item {
+                count += 1;
+                continue;
+            }
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             if let Some(iter) = reader.read_positions() {
@@ -934,7 +954,26 @@ fn load_tree_mesh(color: &Vector3<f32>) -> Mesh {
     );
 
     let vertex_size = 6;
-    Mesh::new("tree", vertices, elements, vertex_size, gl::LINE_LOOP)
+    let mesh = Mesh::new("tree", vertices, elements, vertex_size, gl::LINE_LOOP);
+
+    let mut translation = <Matrix4<f32> as cgmath::One>::one();
+
+    if let Some(scene) = document.default_scene() {
+        println!("default scene provided");
+        let mut nodes = scene.nodes();
+
+        let node = nodes.next().unwrap();
+        let t = node.transform().matrix();
+
+        translation = Matrix4::new(
+            t[0][0], t[0][1], t[0][2], t[0][3], // row 0
+            t[1][0], t[1][1], t[1][2], t[1][3], // row 0
+            t[2][0], t[2][1], t[2][2], t[2][3], // row 0
+            t[3][0], t[3][1], t[3][2], t[3][3], // row 0
+        );
+    }
+
+    (mesh, translation)
 }
 
 fn gen_debug_line_mesh(num_boids: usize) -> Mesh {
