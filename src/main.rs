@@ -164,8 +164,8 @@ fn main() {
     }
 
     let tree_model_inst = vec![
-        Matrix4::from_translation(Vector3::new(5.0, 5.0, 5.0))
-            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 5.0)),
+        Matrix4::from_translation(world_bounds.center())
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.9)),
     ];
     let mut tree_mesh = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0));
     tree_mesh.setup(pos_a, color_a, model_inst_a);
@@ -178,7 +178,7 @@ fn main() {
         Matrix4::from_translation(fly_bbox.center())
             * Matrix4::from(Matrix3::from_value(fly_bbox.xlen())),
     ];
-    let mut cube_mesh = gen_cube_mesh(&Vector3::new(0.0, 0.0, 0.0));
+    let mut cube_mesh = gen_cube_mesh(&Vector3::new(0.5, 0.5, 0.5));
     cube_mesh.setup(pos_a, color_a, model_inst_a);
     cube_mesh.update_inst(&cube_model_inst);
 
@@ -895,18 +895,15 @@ fn gen_cube_mesh(color: &Vector3<f32>) -> Mesh {
 }
 
 fn load_tree_mesh(color: &Vector3<f32>) -> Mesh {
-    let tree_blocks_file = Path::new("data/tree_blocks.gltf");
+    // let tree_blocks_file = Path::new("data/tree_blocks.gltf");
+    let tree_blocks_file = Path::new("data/tree_oak.gltf");
     let (document, buffers, images) = gltf::import(tree_blocks_file).unwrap();
 
     let mut vertices: Vec<f32> = vec![];
     let mut elements: Vec<u32> = vec![];
 
     for mesh in document.meshes() {
-        println!("mes #{}", mesh.index());
-
         for primitive in mesh.primitives() {
-            println!("- primitive #{}", primitive.index());
-
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             if let Some(iter) = reader.read_positions() {
@@ -937,7 +934,6 @@ fn load_tree_mesh(color: &Vector3<f32>) -> Mesh {
     );
 
     let vertex_size = 6;
-    // gl::TRIANGLES
     Mesh::new("tree", vertices, elements, vertex_size, gl::LINE_LOOP)
 }
 
