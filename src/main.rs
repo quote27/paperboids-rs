@@ -163,22 +163,28 @@ fn main() {
         predator_boid.min_speed = 10.0 * world_scale;
     }
 
+    // tree
+    let tree_center_base = Vector3::new(world_bounds.xlen() / 2.0, 0.0, world_bounds.zlen() / 2.0);
+    let tree_scale = Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0));
     let (mut tree_mesh, tree_mesh_translation) = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0), 0);
     let tree_model_inst = vec![
-        tree_mesh_translation * Matrix4::from(Matrix3::from_value(10.0)),
-        Matrix4::from(Matrix3::from_value(10.0)),
-        Matrix4::from_translation(world_bounds.center())
-            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.9)),
+        Matrix4::from_translation(tree_center_base)
+            * tree_mesh_translation
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)),
     ];
     tree_mesh.setup(pos_a, color_a, model_inst_a);
     tree_mesh.update_inst(&tree_model_inst);
 
     let (mut trunk_mesh, trunk_mesh_translation) = load_tree_mesh(&Vector3::new(1.0, 0.6, 0.4), 1);
     let trunk_model_inst = vec![
-        trunk_mesh_translation * Matrix4::from(Matrix3::from_value(10.0)),
-        Matrix4::from(Matrix3::from_value(10.0)),
-        Matrix4::from_translation(world_bounds.center())
-            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.9)),
+        tree_scale,
+        trunk_mesh_translation * tree_scale,
+        tree_scale * trunk_mesh_translation,
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0))
+            * trunk_mesh_translation,
+        Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)) * trunk_mesh_translation,
+        trunk_mesh_translation * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)),
     ];
     trunk_mesh.setup(pos_a, color_a, model_inst_a);
     trunk_mesh.update_inst(&trunk_model_inst);
