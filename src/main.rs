@@ -165,29 +165,92 @@ fn main() {
 
     // tree
     let tree_center_base = Vector3::new(world_bounds.xlen() / 2.0, 0.0, world_bounds.zlen() / 2.0);
+    let tree_origin_shift = Vector3::new(15.0, 0.0, -18.0);
+    let tree_origin_shift_mat = Matrix4::from_translation(tree_origin_shift);
     let tree_scale = Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0));
     let (mut tree_mesh, tree_mesh_translation) = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0), 0);
-    let tree_model_inst = vec![
-        Matrix4::from_translation(tree_center_base)
-            * tree_mesh_translation
-            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)),
-    ];
+    let tree_model_inst = vec![tree_scale];
     tree_mesh.setup(pos_a, color_a, model_inst_a);
     tree_mesh.update_inst(&tree_model_inst);
 
     let (mut trunk_mesh, trunk_mesh_translation) = load_tree_mesh(&Vector3::new(1.0, 0.6, 0.4), 1);
-    let trunk_model_inst = vec![
-        tree_scale,
-        trunk_mesh_translation * tree_scale,
-        tree_scale * trunk_mesh_translation,
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0))
-            * trunk_mesh_translation,
-        Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)) * trunk_mesh_translation,
-        trunk_mesh_translation * Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)),
-    ];
+    let trunk_model_inst = vec![tree_scale];
     trunk_mesh.setup(pos_a, color_a, model_inst_a);
     trunk_mesh.update_inst(&trunk_model_inst);
+
+    println!("tree mesh translation: {:?}", tree_mesh_translation);
+
+    let tree_model_transform = vec![
+        tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(20.0, 2.0, 0.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(30.0, 3.0, 0.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(40.0, 4.0, 0.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(80.0, 8.0, 0.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(10.0, 1.0, 10.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(20.0, 2.0, 20.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(30.0, 3.0, 30.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(40.0, 4.0, 40.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(80.0, 8.0, 80.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        Matrix4::from_translation(Vector3::new(100.0, 8.0, 100.0))
+            * tree_origin_shift_mat
+            * tree_scale,
+        tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
+        Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
+        // tree_scale,
+        // tree_scale,
+        // tree_scale,
+        // Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0)) * tree_scale,
+        // Matrix4::from_translation(Vector3::new(50.0, 5.0, 0.0)) * tree_scale,
+        // Matrix4::from_translation(Vector3::new(100.0, 10.0, 0.0)) * tree_scale,
+        // tree_scale,
+        // Matrix4::from_translation(Vector3::new(10.0, 1.0, 10.0)) * tree_scale,
+        // Matrix4::from_translation(Vector3::new(50.0, 5.0, 50.0)) * tree_scale,
+        // Matrix4::from_translation(Vector3::new(100.0, 10.0, 100.0)) * tree_scale,
+        // tree_scale,
+        // Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)) * tree_scale,
+        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)),
+        // Matrix4::from_translation(Vector3::new(4.0, 0.0, 1.0)) * tree_scale,
+        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, 1.0)),
+        // Matrix4::from_translation(Vector3::new(4.0, 0.0, -1.0)) * tree_scale,
+        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, -1.0)),
+        // Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)) * tree_scale,
+        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)),
+        tree_scale,
+        tree_scale,
+        Matrix4::from_translation(tree_origin_shift) * tree_scale,
+        // Matrix4::from_translation(tree_center_base) * tree_scale * trunk_mesh_translation,
+        // Matrix4::from_translation(tree_center_base2) * tree_scale * trunk_mesh_translation,
+        // Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)) * trunk_mesh_translation,
+        // trunk_mesh_translation * tree_scale,
+    ];
+    let mut tree_inst = vec![tree_model_transform[0]];
 
     // other models
     let cube_model_inst = vec![
@@ -267,6 +330,7 @@ fn main() {
     let mut enable_octree = false;
     let mut debug_octree_level = 0; // 0: no debug, 1: leaves, 2: nodes, 3: all
     let mut frame_count = 0;
+    let mut tree_frame_count = 0;
 
     frame_t.start();
     while !window.should_close() {
@@ -776,8 +840,18 @@ fn main() {
 
         predator_mesh.draw_inst(predator_model_inst.len() as GLint);
 
-        tree_mesh.draw_inst(tree_model_inst.len() as GLint);
-        trunk_mesh.draw_inst(trunk_model_inst.len() as GLint);
+        {
+            // loop through tree positions
+            if frame_count % 30 == 0 {
+                tree_frame_count = (tree_frame_count + 1) % tree_model_transform.len();
+                println!("tree frame: {}", tree_frame_count);
+                tree_inst = vec![tree_model_transform[tree_frame_count]];
+                tree_mesh.update_inst(&tree_inst);
+                trunk_mesh.update_inst(&tree_inst);
+            }
+            tree_mesh.draw_inst(tree_inst.len() as GLint);
+            trunk_mesh.draw_inst(tree_inst.len() as GLint);
+        }
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);
         axis_mesh.draw_inst(axis_model_inst.len() as GLint);
@@ -972,9 +1046,9 @@ fn load_tree_mesh(color: &Vector3<f32>, item: u32) -> (Mesh, Matrix4<f32>) {
         let t = node.transform().matrix();
 
         translation = Matrix4::new(
-            t[0][0], t[0][1], t[0][2], t[0][3], // row 0
-            t[1][0], t[1][1], t[1][2], t[1][3], // row 0
-            t[2][0], t[2][1], t[2][2], t[2][3], // row 0
+            t[0][0], t[0][1], t[0][2], -t[0][3], // row 0
+            t[1][0], t[1][1], t[1][2], -t[1][3], // row 0
+            t[2][0], t[2][1], t[2][2], -t[2][3], // row 0
             t[3][0], t[3][1], t[3][2], t[3][3], // row 0
         );
     }
