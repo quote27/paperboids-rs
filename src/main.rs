@@ -190,178 +190,78 @@ fn main() {
     let tree_origin_shift_scaled_down = Vector3::new(0.3, 0.0, -0.36);
 
     let tree_model_transform = vec![
-        // // shift to origin with world/2 scale
-        // tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(20.0, 2.0, 0.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(30.0, 3.0, 0.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(40.0, 4.0, 0.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(80.0, 8.0, 0.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(10.0, 1.0, 10.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(20.0, 2.0, 20.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(30.0, 3.0, 30.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(40.0, 4.0, 40.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(80.0, 8.0, 80.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // Matrix4::from_translation(Vector3::new(100.0, 8.0, 100.0))
-        //     * tree_origin_shift_mat
-        //     * tree_scale,
-        // tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_origin_shift_mat * tree_scale,
-        // // end center
-        // // start: trying to figure out shift to center pre scaling
-        Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(20.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(30.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(40.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(60.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(70.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(80.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(90.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(100.0, 1.0, 0.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 10.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 20.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 30.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 40.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 50.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 60.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 70.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 80.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 90.0)),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 100.0)),
-        Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(20.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(30.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(40.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(60.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(70.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(80.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(90.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(100.0, 1.0, 0.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 10.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 20.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 30.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 40.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 50.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 60.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 70.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 80.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 90.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 100.0)) * tree_scale,
-        Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(1.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(20.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(2.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(30.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(3.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(40.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(4.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(5.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(60.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(6.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(70.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(7.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(80.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(8.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(90.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(9.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(100.0, 1.0, 0.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(10.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 10.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(12.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 20.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(14.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 30.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(16.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 40.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(18.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 50.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(20.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 60.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(25.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 70.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(30.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 80.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(40.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 90.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(50.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(Vector3::new(50.0, 1.0, 100.0))
-            * tree_scale
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(60.0))
             * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        // // end
-        // tree_scale,
-        // tree_scale,
-        // tree_scale,
-        // Matrix4::from_translation(Vector3::new(10.0, 1.0, 0.0)) * tree_scale,
-        // Matrix4::from_translation(Vector3::new(50.0, 5.0, 0.0)) * tree_scale,
-        // Matrix4::from_translation(Vector3::new(100.0, 10.0, 0.0)) * tree_scale,
-        // tree_scale,
-        // Matrix4::from_translation(Vector3::new(10.0, 1.0, 10.0)) * tree_scale,
-        // Matrix4::from_translation(Vector3::new(50.0, 5.0, 50.0)) * tree_scale,
-        // Matrix4::from_translation(Vector3::new(100.0, 10.0, 100.0)) * tree_scale,
-        // tree_scale,
-        // Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)) * tree_scale,
-        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)),
-        // Matrix4::from_translation(Vector3::new(4.0, 0.0, 1.0)) * tree_scale,
-        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, 1.0)),
-        // Matrix4::from_translation(Vector3::new(4.0, 0.0, -1.0)) * tree_scale,
-        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, -1.0)),
-        // Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)) * tree_scale,
-        // tree_scale * Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0)),
-        tree_scale,
-        tree_scale,
-        Matrix4::from_translation(tree_origin_shift) * tree_scale,
-        // Matrix4::from_translation(tree_center_base) * tree_scale * trunk_mesh_translation,
-        // Matrix4::from_translation(tree_center_base2) * tree_scale * trunk_mesh_translation,
-        // Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0)) * trunk_mesh_translation,
-        // trunk_mesh_translation * tree_scale,
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(70.0))
+            * Matrix4::from_translation(tree_origin_shift_scaled_down),
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(80.0))
+            * Matrix4::from_translation(tree_origin_shift_scaled_down),
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(90.0))
+            * Matrix4::from_translation(tree_origin_shift_scaled_down),
+        Matrix4::from_translation(tree_center_base)
+            * Matrix4::from(Matrix3::from_value(100.0))
+            * Matrix4::from_translation(tree_origin_shift_scaled_down),
     ];
     let mut tree_inst = vec![tree_model_transform[0]];
 
@@ -955,7 +855,7 @@ fn main() {
 
         {
             // loop through tree positions
-            if frame_count % 30 == 0 {
+            if frame_count % 10 == 0 {
                 tree_frame_count = (tree_frame_count + 1) % tree_model_transform.len();
                 println!("tree frame: {}", tree_frame_count);
                 tree_inst = vec![tree_model_transform[tree_frame_count]];
