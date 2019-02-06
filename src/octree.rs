@@ -1,10 +1,9 @@
 extern crate cgmath;
 
-use cgmath::{Vector3, Zero};
 use aabb::AABB;
 use boids::Boid;
+use cgmath::{Vector3, Zero};
 use std::usize;
-
 
 /// Enum representing the Octnode's state.
 /// - Empty: node hasn't been initialized
@@ -35,7 +34,16 @@ impl Octnode {
     fn new(parent: usize, bbox: AABB, boid_id: usize, b: &Boid) -> Octnode {
         Octnode {
             parent: parent,
-            child: [usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX],
+            child: [
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+            ],
             boid: boid_id,
             bbox: bbox,
             state: OctnodeState::Leaf,
@@ -48,7 +56,16 @@ impl Octnode {
     fn empty(bbox: AABB) -> Octnode {
         Octnode {
             parent: usize::MAX,
-            child: [usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX],
+            child: [
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+            ],
             boid: usize::MAX,
             bbox: bbox,
             state: OctnodeState::Empty,
@@ -85,10 +102,7 @@ impl Octree {
         let mut p = Vec::with_capacity(1 << 8);
         p.push(Octnode::empty(bbox)); // TODO: assign world bb to octree struct, then can remove empty checks
 
-        Octree {
-            root: 0,
-            pool: p,
-        }
+        Octree { root: 0, pool: p }
     }
 
     /// Barnes-Hut update function.
@@ -102,8 +116,8 @@ impl Octree {
         let state = self.pool[curr_id].state;
 
         match state {
-            OctnodeState::Empty => { }
-            OctnodeState::Leaf => { } // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
+            OctnodeState::Empty => {}
+            OctnodeState::Leaf => {} // TODO: verify: when leaf nodes are created, c and v are set. nodes are never converted to leaf state
             OctnodeState::Node => {
                 let mut c: Vector3<f32> = Vector3::zero();
                 let mut v: Vector3<f32> = Vector3::zero();
@@ -116,7 +130,7 @@ impl Octree {
                         let child_state = self.pool[child_id].state;
                         match child_state {
                             OctnodeState::Node => self.update_recur(child_id, bs),
-                            _ => { }
+                            _ => {}
                         }
 
                         let o = &self.pool[child_id];
@@ -153,21 +167,32 @@ impl Octree {
     }
 
     /// Recursively insert boid to Octree.
-    fn insert_recur(&mut self, curr_id: usize, parent_id: usize, bs: &Vec<Boid>, boid_id: usize, bbox: &AABB, recur: usize) -> usize {
+    fn insert_recur(
+        &mut self,
+        curr_id: usize,
+        parent_id: usize,
+        bs: &Vec<Boid>,
+        boid_id: usize,
+        bbox: &AABB,
+        recur: usize,
+    ) -> usize {
         let mut space = String::with_capacity(2 * recur);
-        for _ in 0..recur { space.push_str("  "); }
+        for _ in 0..recur {
+            space.push_str("  ");
+        }
         // println!("{}ir: boid: {}, curr: {}, parent: {}", space, boid_id, curr_id, parent_id);
 
         if curr_id == usize::MAX {
             //println!("null node, pulling from pool");
-            self.pool.push(Octnode::new(parent_id, *bbox, boid_id, &bs[boid_id]));
+            self.pool
+                .push(Octnode::new(parent_id, *bbox, boid_id, &bs[boid_id]));
 
             // println!("{}  : curr oid is null, adding new octnode: {}", space, i32(self.pool.len() - 1));
             self.pool.len() - 1
-
         } else {
             match self.pool[curr_id].state {
-                OctnodeState::Empty => { // this only happens for the first insert case (root node)
+                OctnodeState::Empty => {
+                    // this only happens for the first insert case (root node)
                     self.pool[curr_id] = Octnode::new(parent_id, *bbox, boid_id, &bs[boid_id]);
 
                     // println!("{}  : curr id is empty, this is root", space);
@@ -176,7 +201,8 @@ impl Octree {
                 OctnodeState::Leaf => {
                     let center = bbox.center();
 
-                    { // convert current node to internal node, and push boid to the correct child
+                    {
+                        // convert current node to internal node, and push boid to the correct child
                         let oldboid_id = self.pool[curr_id].boid;
 
                         let new_oct = get_octant(&bs[oldboid_id].pos, &center);
@@ -193,7 +219,14 @@ impl Octree {
                             panic!("printing tree state and quitting");
                         }
 
-                        let new_child_id = self.insert_recur(child_id, curr_id, bs, oldboid_id, &new_bounds, recur + 1);
+                        let new_child_id = self.insert_recur(
+                            child_id,
+                            curr_id,
+                            bs,
+                            oldboid_id,
+                            &new_bounds,
+                            recur + 1,
+                        );
 
                         // println!("{}  : leaf a: new child id: {}", space, new_child_id);
 
@@ -210,7 +243,8 @@ impl Octree {
 
                     // println!("{}  : leaf b: oct: {}, traversal child: {}", space, oct, child_id);
 
-                    let new_child_id = self.insert_recur(child_id, curr_id, bs, boid_id, &new_bounds, recur +1);
+                    let new_child_id =
+                        self.insert_recur(child_id, curr_id, bs, boid_id, &new_bounds, recur + 1);
 
                     // println!("{}  : leaf b: new child id: {}", space, new_child_id);
 
@@ -226,7 +260,8 @@ impl Octree {
 
                     // println!("{}  : node: oct: {}, traversal child: {}", space, oct, child_id);
 
-                    let new_child_id = self.insert_recur(child_id, curr_id, bs, boid_id, &new_bounds, recur + 1);
+                    let new_child_id =
+                        self.insert_recur(child_id, curr_id, bs, boid_id, &new_bounds, recur + 1);
 
                     // println!("{}  : node: new child id: {}", space, new_child_id);
 
@@ -239,7 +274,11 @@ impl Octree {
 
     /// Print out some statistics on the Octree.  Currently just prints `pool.len()` and `pool.capacity()`.
     pub fn stats(&self) {
-        println!("elem used: {}, capacity: {}", self.pool.len(), self.pool.capacity());
+        println!(
+            "elem used: {}, capacity: {}",
+            self.pool.len(),
+            self.pool.capacity()
+        );
     }
 
     /// Return a reference to the Octnode object at index `id`.
@@ -258,15 +297,22 @@ impl Octree {
         }
 
         let mut space = String::with_capacity(2 * recur);
-        for _ in 0..recur { space.push_str("  "); }
+        for _ in 0..recur {
+            space.push_str("  ");
+        }
 
-        println!("{}{} {}: {} b: {}", space, oct, curr_id,
-                 match self.pool[curr_id].state {
-                     OctnodeState::Empty => "e",
-                     OctnodeState::Node => "n",
-                     OctnodeState::Leaf => "l",
-                 },
-                 self.pool[curr_id].boid);
+        println!(
+            "{}{} {}: {} b: {}",
+            space,
+            oct,
+            curr_id,
+            match self.pool[curr_id].state {
+                OctnodeState::Empty => "e",
+                OctnodeState::Node => "n",
+                OctnodeState::Leaf => "l",
+            },
+            self.pool[curr_id].boid
+        );
 
         for i in 0..8 {
             self.print_recur(self.pool[curr_id].child[i], i, recur + 1);
@@ -293,17 +339,34 @@ fn get_octant(p: &Vector3<f32>, c: &Vector3<f32>) -> usize {
 
 /// Generate aabb for new octant.
 fn gen_oct_bounds(oct: usize, bbox: &AABB, center: &Vector3<f32>) -> AABB {
-    let (lo, hi) =
-        match oct {
-            0 => { (Vector3::new(bbox.l.x, bbox.l.y, center.z), Vector3::new(center.x, center.y, bbox.h.z)) }
-            1 => { (Vector3::new(center.x, bbox.l.y, center.z), Vector3::new(bbox.h.x, center.y, bbox.h.z)) }
-            2 => { (Vector3::new(bbox.l.x, center.y, center.z), Vector3::new(center.x, bbox.h.y, bbox.h.z)) }
-            3 => { (*center, bbox.h) }
-            4 => { (bbox.l, *center) }
-            5 => { (Vector3::new(center.x, bbox.l.y, bbox.l.z), Vector3::new(bbox.h.x, center.y, center.z)) }
-            6 => { (Vector3::new(bbox.l.x, center.y, bbox.l.z), Vector3::new(center.x, bbox.h.y, center.z)) }
-            7 => { (Vector3::new(center.x, center.y, bbox.l.z), Vector3::new(bbox.h.x, bbox.h.y, center.z)) }
-            _ => { (Vector3::zero(), Vector3::zero()) } // TODO: maybe make this a fail! ?
-        };
+    let (lo, hi) = match oct {
+        0 => (
+            Vector3::new(bbox.l.x, bbox.l.y, center.z),
+            Vector3::new(center.x, center.y, bbox.h.z),
+        ),
+        1 => (
+            Vector3::new(center.x, bbox.l.y, center.z),
+            Vector3::new(bbox.h.x, center.y, bbox.h.z),
+        ),
+        2 => (
+            Vector3::new(bbox.l.x, center.y, center.z),
+            Vector3::new(center.x, bbox.h.y, bbox.h.z),
+        ),
+        3 => (*center, bbox.h),
+        4 => (bbox.l, *center),
+        5 => (
+            Vector3::new(center.x, bbox.l.y, bbox.l.z),
+            Vector3::new(bbox.h.x, center.y, center.z),
+        ),
+        6 => (
+            Vector3::new(bbox.l.x, center.y, bbox.l.z),
+            Vector3::new(center.x, bbox.h.y, center.z),
+        ),
+        7 => (
+            Vector3::new(center.x, center.y, bbox.l.z),
+            Vector3::new(bbox.h.x, bbox.h.y, center.z),
+        ),
+        _ => (Vector3::zero(), Vector3::zero()), // TODO: maybe make this a fail! ?
+    };
     AABB::new(lo, hi)
 }

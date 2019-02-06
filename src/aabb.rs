@@ -40,20 +40,26 @@ pub struct AABB {
 impl AABB {
     /// Creates a new axis aligned bounding box.  Doesn't check to see if low < high.
     pub fn new(low: Vector3<f32>, high: Vector3<f32>) -> AABB {
-        AABB { l: low, h: high, }
+        AABB { l: low, h: high }
     }
 
     /// Calculates length of x-axis.
     #[inline(always)]
-    pub fn xlen(&self) -> f32 { self.h.x - self.l.x }
+    pub fn xlen(&self) -> f32 {
+        self.h.x - self.l.x
+    }
 
     /// Calculates length of y-axis.
     #[inline(always)]
-    pub fn ylen(&self) -> f32 { self.h.y - self.l.y }
+    pub fn ylen(&self) -> f32 {
+        self.h.y - self.l.y
+    }
 
     /// Calculates length of z-axis.
     #[inline(always)]
-    pub fn zlen(&self) -> f32 { self.h.z - self.l.z }
+    pub fn zlen(&self) -> f32 {
+        self.h.z - self.l.z
+    }
 
     /// Returns a Vector3<f32> representing the center of the box.
     pub fn center(&self) -> Vector3<f32> {
@@ -87,8 +93,10 @@ impl AABB {
 
 impl fmt::Display for AABB {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[l: ({}, {}, {}), h: ({}, {}, {})]",
-               self.l.x, self.l.y, self.l.z,
-               self.h.x, self.h.y, self.h.z)
+        write!(
+            f,
+            "[l: ({}, {}, {}), h: ({}, {}, {})]",
+            self.l.x, self.l.y, self.l.z, self.h.x, self.h.y, self.h.z
+        )
     }
 }

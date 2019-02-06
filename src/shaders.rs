@@ -1,20 +1,20 @@
+extern crate cgmath;
 extern crate gl;
 extern crate glfw;
-extern crate cgmath;
 
-use gl::types::*;
-use std::ptr;
-use std::mem;
-use std::fmt;
-use std::ffi::CString;
 use cgmath::{Matrix4, Vector4};
+use gl::types::*;
+use std::ffi::CString;
+use std::fmt;
+use std::mem;
+use std::ptr;
 
 /// Load a file at the given source, return a String
 /// with the contents
 fn load_file(file_src: &str) -> String {
     use std::fs::File;
-    use std::path::Path;
     use std::io::prelude::*;
+    use std::path::Path;
 
     let path = Path::new(file_src);
     let mut f = File::open(&path).unwrap();
@@ -25,7 +25,6 @@ fn load_file(file_src: &str) -> String {
     }
     dat
 }
-
 
 /// Shader type.  Contains information relevant to opengl shaders.
 pub struct Shader {
@@ -85,8 +84,15 @@ impl Shader {
                 gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
                 // TODO: removed the subtract 1 on len, this may cause a crash
                 let mut buf = Vec::with_capacity(len as usize);
-                for _ in 0..len-1 { buf.push(0u8); }
-                gl::GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
+                for _ in 0..len - 1 {
+                    buf.push(0u8);
+                }
+                gl::GetShaderInfoLog(
+                    shader,
+                    len,
+                    ptr::null_mut(),
+                    buf.as_mut_ptr() as *mut GLchar,
+                );
                 panic!("{}", String::from_utf8(buf).unwrap());
             }
             shader
@@ -96,10 +102,13 @@ impl Shader {
 
 impl fmt::Display for Shader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "file: {}, type: {}, s: {}", self.file_name, self.ty, self.s)
+        write!(
+            f,
+            "file: {}, type: {}, s: {}",
+            self.file_name, self.ty, self.s
+        )
     }
 }
-
 
 pub struct Program(GLuint);
 
@@ -123,7 +132,9 @@ impl Program {
                 gl::GetProgramiv(prog, gl::INFO_LOG_LENGTH, &mut len);
                 // TODO: removed the subtract 1 on len, this may cause a crash
                 let mut buf = Vec::with_capacity(len as usize);
-                for _ in 0..len-1 { buf.push(0u8); }
+                for _ in 0..len - 1 {
+                    buf.push(0u8);
+                }
                 gl::GetProgramInfoLog(prog, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
                 panic!("{}", String::from_utf8(buf).unwrap());
             }
@@ -136,7 +147,7 @@ impl Program {
         let Program(p) = *self;
         let u = unsafe {
             let c_str = CString::new(name).unwrap();
-            gl::GetUniformLocation(p, c_str.as_ptr()) 
+            gl::GetUniformLocation(p, c_str.as_ptr())
         };
         Uniform(u)
     }
@@ -153,13 +164,17 @@ impl Program {
     #[inline(always)]
     pub fn use_prog(&self) {
         let Program(p) = *self;
-        unsafe { gl::UseProgram(p); }
+        unsafe {
+            gl::UseProgram(p);
+        }
     }
 
     #[inline(always)]
     pub fn delete(&mut self) {
         let Program(p) = *self;
-        unsafe { gl::DeleteProgram(p); }
+        unsafe {
+            gl::DeleteProgram(p);
+        }
     }
 }
 
@@ -170,35 +185,43 @@ impl fmt::Display for Program {
     }
 }
 
-
 pub struct Uniform(GLint);
 
 impl Uniform {
     pub fn upload_m4f(&self, m: &Matrix4<f32>) {
         let Uniform(u) = *self;
-        unsafe { gl::UniformMatrix4fv(u, 1, gl::FALSE, mem::transmute(m)); }
+        unsafe {
+            gl::UniformMatrix4fv(u, 1, gl::FALSE, mem::transmute(m));
+        }
     }
 
     pub fn upload_v4f(&self, v: &Vector4<f32>) {
         let Uniform(u) = *self;
-        unsafe { gl::Uniform4fv(u, 4, mem::transmute(v)); }
+        unsafe {
+            gl::Uniform4fv(u, 4, mem::transmute(v));
+        }
     }
 
     pub fn upload_3f(&self, a: f32, b: f32, c: f32) {
         let Uniform(u) = *self;
-        unsafe { gl::Uniform3f(u, a, b, c); }
+        unsafe {
+            gl::Uniform3f(u, a, b, c);
+        }
     }
 
     pub fn upload_1f(&self, a: f32) {
         let Uniform(u) = *self;
-        unsafe { gl::Uniform1f(u, a); }
+        unsafe {
+            gl::Uniform1f(u, a);
+        }
     }
 
     pub fn upload_1i(&self, a: i32) {
         let Uniform(u) = *self;
-        unsafe { gl::Uniform1i(u, a); }
+        unsafe {
+            gl::Uniform1i(u, a);
+        }
     }
-
 }
 
 impl fmt::Display for Uniform {
@@ -207,4 +230,3 @@ impl fmt::Display for Uniform {
         write!(f, "{}", u)
     }
 }
-
