@@ -164,106 +164,32 @@ fn main() {
     }
 
     // tree
-    let tree_center_base = Vector3::new(world_bounds.xlen() / 2.0, 0.0, world_bounds.zlen() / 2.0);
-    let tree_origin_shift = Vector3::new(15.0, 0.0, -18.0);
-    println!(
-        "tree origin shift: {:?} -> scaled down {:?}",
-        tree_origin_shift,
-        tree_origin_shift / (world_bounds.zlen() / 2.0)
-    );
-    let tree_origin_shift_mat = Matrix4::from_translation(tree_origin_shift);
-    // NOTE: all translations are based off of world_bounds.zlen() / 2.0
-    // haven't figured out how to move it to the origin pre-scaled yet
-    let tree_scale = Matrix4::from(Matrix3::from_value(world_bounds.xlen() / 2.0));
-    let (mut tree_mesh, tree_mesh_translation) = load_tree_mesh(&Vector3::new(0.0, 1.0, 0.0), 0);
-    let tree_model_inst = vec![tree_scale];
-    tree_mesh.setup(pos_a, color_a, model_inst_a);
-    tree_mesh.update_inst(&tree_model_inst);
-
-    let (mut trunk_mesh, trunk_mesh_translation) = load_tree_mesh(&Vector3::new(1.0, 0.6, 0.4), 1);
-    let trunk_model_inst = vec![tree_scale];
-    trunk_mesh.setup(pos_a, color_a, model_inst_a);
-    trunk_mesh.update_inst(&trunk_model_inst);
-
-    println!("tree mesh translation: {:?}", tree_mesh_translation);
-
-    let tree_origin_shift_scaled_down = Vector3::new(0.3, 0.0, -0.36);
-
+    let tree_center_base = Matrix4::from_translation(Vector3::new(
+        world_bounds.xlen() / 2.0,
+        0.0,
+        world_bounds.zlen() / 2.0,
+    ));
+    let tree_oak_file = Path::new("data/tree_oak.gltf");
+    let tree_oak_origin_transform = Matrix4::from_translation(Vector3::new(0.3, 0.0, -0.36));
+    let mut tree_meshes =
+        mesh::load_gltf_mesh("tree_oak", &tree_oak_file, None, Some(gl::LINE_LOOP));
     let tree_model_transform = vec![
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(1.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(2.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(3.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(4.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(5.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(6.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(7.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(8.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(9.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(10.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(12.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(14.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(16.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(18.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(20.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(25.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(30.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(40.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(50.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(60.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(70.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(80.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(90.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
-        Matrix4::from_translation(tree_center_base)
-            * Matrix4::from(Matrix3::from_value(100.0))
-            * Matrix4::from_translation(tree_origin_shift_scaled_down),
+        tree_center_base * Matrix4::from(Matrix3::from_value(1.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(2.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(4.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(8.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(16.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(20.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(25.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(30.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(40.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(50.0)) * tree_oak_origin_transform,
     ];
     let mut tree_inst = vec![tree_model_transform[0]];
+    for mut tree_mesh in tree_meshes.iter_mut() {
+        tree_mesh.setup(pos_a, color_a, model_inst_a);
+        tree_mesh.update_inst(&tree_inst);
+    }
 
     // other models
     let cube_model_inst = vec![
@@ -857,13 +783,14 @@ fn main() {
             // loop through tree positions
             if frame_count % 10 == 0 {
                 tree_frame_count = (tree_frame_count + 1) % tree_model_transform.len();
-                println!("tree frame: {}", tree_frame_count);
                 tree_inst = vec![tree_model_transform[tree_frame_count]];
-                tree_mesh.update_inst(&tree_inst);
-                trunk_mesh.update_inst(&tree_inst);
+                for mut tree_mesh in tree_meshes.iter_mut() {
+                    tree_mesh.update_inst(&tree_inst);
+                }
             }
-            tree_mesh.draw_inst(tree_inst.len() as GLint);
-            trunk_mesh.draw_inst(tree_inst.len() as GLint);
+            for mut tree_mesh in tree_meshes.iter_mut() {
+                tree_mesh.draw_inst(tree_inst.len() as GLint);
+            }
         }
 
         cube_mesh.draw_inst(cube_model_inst.len() as GLint);

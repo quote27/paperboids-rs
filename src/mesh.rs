@@ -6,6 +6,7 @@ use cgmath::*;
 use gl::types::*;
 use gl_error_str;
 use std::mem;
+use std::path::Path;
 use std::ptr;
 
 /// Mesh structure containing vertex and element information.
@@ -231,4 +232,61 @@ impl Mesh {
         }
         gl_error_str("mesh: draw_inst");
     }
+}
+
+pub fn load_gltf_mesh(
+    name: &str,
+    path: &Path,
+    color: Option<Vector3<f32>>,
+    gl_type: Option<GLenum>,
+) -> Vec<Mesh> {
+    let (document, buffers, images) =
+        gltf::import(path).expect(&format!("failed to load gltf file {}", path.display()));
+
+    let vertex_size = 6;
+
+    let mut meshes = vec![];
+
+    for mesh in document.meshes() {
+        for primitive in mesh.primitives() {
+            let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+            let name = format!("{}-{}", name, primitive.index());
+
+            let color = if let Some(color) = color {
+                color
+            } else {
+                let mat = primitive.material();
+                let pbr_metallic = mat.pbr_metallic_roughness();
+                let base_color = pbr_metallic.base_color_factor();
+                // ignoring alpha for now
+                Vector3::new(base_color[0], base_color[1], base_color[2])
+            };
+
+            let mut vertices: Vec<f32> = vec![];
+            let mut elements: Vec<u32> = vec![];
+
+            if let Some(iter) = reader.read_positions() {
+                for vert_pos in iter {
+                    vertices.extend_from_slice(&vert_pos);
+                    vertices.push(color[0]);
+                    vertices.push(color[1]);
+                    vertices.push(color[2]);
+                }
+            }
+
+            if let Some(readindices) = reader.read_indices() {
+                elements.extend(readindices.into_u32());
+            }
+
+            let gl_type = if let Some(gl_type) = gl_type {
+                gl_type
+            } else {
+                primitive.mode().as_gl_enum()
+            };
+
+            meshes.push(Mesh::new(&name, vertices, elements, vertex_size, gl_type));
+        }
+    }
+
+    meshes
 }
