@@ -164,26 +164,26 @@ fn main() {
     }
 
     // tree
+    let tree_oak_file = Path::new("data/tree_oak.gltf");
     let tree_center_base = Matrix4::from_translation(Vector3::new(
         world_bounds.xlen() / 2.0,
         0.0,
         world_bounds.zlen() / 2.0,
     ));
-    let tree_oak_file = Path::new("data/tree_oak.gltf");
     let tree_oak_origin_transform = Matrix4::from_translation(Vector3::new(0.3, 0.0, -0.36));
-    let mut tree_meshes =
-        mesh::load_gltf_mesh("tree_oak", &tree_oak_file, None, Some(gl::LINE_LOOP));
+    let mut tree_meshes = mesh::load_gltf_mesh("tree_oak", &tree_oak_file, None, None); // Some(gl::LINE_LOOP));
     let tree_model_transform = vec![
-        tree_center_base * Matrix4::from(Matrix3::from_value(1.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(2.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(4.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(8.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(16.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(20.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(25.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(30.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(40.0)) * tree_oak_origin_transform,
-        tree_center_base * Matrix4::from(Matrix3::from_value(50.0)) * tree_oak_origin_transform,
+        tree_center_base * Matrix4::from(Matrix3::from_value(10.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(1.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(2.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(4.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(8.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(16.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(20.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(25.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(30.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(40.0)) * tree_oak_origin_transform,
+        // tree_center_base * Matrix4::from(Matrix3::from_value(50.0)) * tree_oak_origin_transform,
     ];
     let mut tree_inst = vec![tree_model_transform[0]];
     for mut tree_mesh in tree_meshes.iter_mut() {
