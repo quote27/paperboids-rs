@@ -142,7 +142,7 @@ fn main() {
     for b in bs.iter() {
         model_inst.push(b.model() * model_default_scale_mat);
     }
-    let mut plane_mesh = gen_paperplane_mesh();
+    let mut plane_mesh = gen_paperplane_mesh(&Vector3::new(1.0, 1.0, 1.0));
     plane_mesh.setup(pos_a, color_a, model_inst_a);
     plane_mesh.update_inst(&model_inst);
 
@@ -156,7 +156,7 @@ fn main() {
     let mut predator_boid = Boid::random_new(&fly_bbox);
     let predator_model_inst = vec![predator_boid.model() * pred_model_default_scale_mat];
     // let mut predator_mesh = gen_cube_mesh(&Vector3::new(1.0, 0.0, 0.0));
-    let mut predator_mesh = gen_paperplane_mesh_color(&Vector3::new(1.0, 0.0, 0.0));
+    let mut predator_mesh = gen_paperplane_mesh(&Vector3::new(1.0, 0.0, 0.0));
     predator_mesh.setup(pos_a, color_a, model_inst_a);
     predator_mesh.update_inst(&predator_model_inst);
     {
@@ -838,33 +838,7 @@ fn gl_error_str(s: &str) {
     }
 }
 
-fn gen_paperplane_mesh() -> Mesh {
-    // z+ is front
-    // y+ is top
-    let vertices = vec![
-        // vertex        // color
-        0.0, 0.0, 1.0, 1.0, 1.0, 1.0f32, // front / nose
-        0.75, 0.0, -1.0, 1.0, 1.0, 1.0, // left wing / 'port'
-        -0.75, 0.0, -1.0, 1.0, 1.0, 1.0, // right wing / 'starboard
-        0.0, 0.0, -1.0, 1.0, 1.0, 1.0, // back midpoint between wings
-        0.0, -0.4, -1.0, 1.0, 1.0, 1.0, // back bottom fin
-    ];
-    let vertex_size = 6;
-
-    // triangles
-    // let elements = vec![
-    //     0u32, 1, 3,
-    //     0, 3, 2,
-    //     0, 4, 3,
-    // ];
-
-    // lines
-    let elements = vec![0u32, 1, 2, 0, 3, 4];
-
-    Mesh::new("paperplane", vertices, elements, vertex_size, gl::LINE_LOOP)
-}
-
-fn gen_paperplane_mesh_color(color: &Vector3<f32>) -> Mesh {
+fn gen_paperplane_mesh(color: &Vector3<f32>) -> Mesh {
     // z+ is front
     // y+ is top
     let vertices = vec![
