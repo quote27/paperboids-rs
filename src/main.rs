@@ -14,8 +14,6 @@ use glfw::{Action, Context, Key, Modifiers};
 use mesh::Mesh;
 use octree::{Octnode, Octree};
 use shaders::{Program, Shader};
-use std::fs;
-use std::io;
 use std::mem;
 use std::path::Path;
 use std::sync::mpsc;
@@ -905,7 +903,7 @@ fn gen_cube_mesh(color: &Vector3<f32>) -> Mesh {
 fn load_tree_mesh(color: &Vector3<f32>, item: u32) -> (Mesh, Matrix4<f32>) {
     // let tree_blocks_file = Path::new("data/tree_blocks.gltf");
     let tree_blocks_file = Path::new("data/tree_oak.gltf");
-    let (document, buffers, images) = gltf::import(tree_blocks_file).unwrap();
+    let (document, buffers, _images) = gltf::import(tree_blocks_file).unwrap();
 
     let mut vertices: Vec<f32> = vec![];
     let mut elements: Vec<u32> = vec![];

@@ -240,7 +240,7 @@ pub fn load_gltf_mesh(
     color: Option<Vector3<f32>>,
     gl_type: Option<GLenum>,
 ) -> Vec<Mesh> {
-    let (document, buffers, images) =
+    let (document, buffers, _images) =
         gltf::import(path).expect(&format!("failed to load gltf file {}", path.display()));
 
     let vertex_size = 6;
